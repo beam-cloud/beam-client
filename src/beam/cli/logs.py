@@ -6,17 +6,17 @@ from beta9.clients.gateway import GatewayServiceStub
 
 
 @click.group(
-    name="status",
-    help="Show beam.cloud status",
+    name="logs",
+    help="View logs",
 )
 @click.pass_context
 def cli(ctx: click.Context):
     ctx.obj = ctx.with_resource(get_gateway_service())
 
 @cli.command(
-    name="list",
-    help="List all status",
+    name="tail",
+    help="Tail logs from a container",
 )
 @click.pass_obj
 def perf(_: GatewayServiceStub):
-    terminal.warn("some status")
+    terminal.warn("some logs...")

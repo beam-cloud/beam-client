@@ -1,22 +1,23 @@
 import click
-
 from beta9 import terminal
-from beta9.cli.contexts import get_gateway_service
-from beta9.clients.gateway import GatewayServiceStub
+from beta9.channel import ServiceClient
+from beta9.cli.extraclick import ClickCommonGroup, pass_service_client
 
 
 @click.group(
     name="logs",
-    help="View logs",
+    help="View logs.",
+    cls=ClickCommonGroup,
 )
-@click.pass_context
-def cli(ctx: click.Context):
-    ctx.obj = ctx.with_resource(get_gateway_service())
+@pass_service_client
+def common(**_):
+    pass
 
-@cli.command(
+
+@common.command(
     name="tail",
-    help="Tail logs from a container",
+    help="Tail logs from a container.",
 )
 @click.pass_obj
-def perf(_: GatewayServiceStub):
+def tail(_: ServiceClient):
     terminal.warn("some logs...")

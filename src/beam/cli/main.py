@@ -1,4 +1,6 @@
-from beta9.cli.main import cli
-from beam.cli import logs
+from beta9.cli.main import load_cli
 
-cli.add_command(logs.cli)
+from . import logs
+
+cli = load_cli()
+cli.register(logs)

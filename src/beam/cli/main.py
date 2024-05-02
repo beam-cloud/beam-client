@@ -2,13 +2,13 @@ import os
 from pathlib import Path
 
 from beta9.cli.main import load_cli
-from beta9.config import CLISettings
+from beta9.config import SDKSettings
 
 from . import logs
 
-settings = CLISettings(
+settings = SDKSettings(
     name="Beam",
-    gateway_host=os.getenv("GATEWAY_HOST", "gateway.stage.beam.cloud"),
+    gateway_host=os.getenv("GATEWAY_HOST", "gateway.beam.cloud"),
     gateway_port=int(os.getenv("GATEWAY_PORT", 443)),
     config_path=Path("~/.beam/config.ini").expanduser(),
 )

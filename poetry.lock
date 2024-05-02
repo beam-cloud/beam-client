@@ -55,13 +55,13 @@ tests = ["mypy (>=0.800)", "pytest", "pytest-asyncio"]
 
 [[package]]
 name = "beta9"
-version = "0.1.12"
+version = "0.1.13"
 description = ""
 optional = false
 python-versions = "<4.0,>=3.8"
 files = [
-    {file = "beta9-0.1.12-py3-none-any.whl", hash = "sha256:c6bacc443f6496c89ccec7d255677d1fd8f9202c6c1665e0bf0b25e7564ba6cb"},
-    {file = "beta9-0.1.12.tar.gz", hash = "sha256:a403860bc9edb6abe2f3ee7e7673e14046cb8b9f7bd0d816c7604ecc0e8c653c"},
+    {file = "beta9-0.1.13-py3-none-any.whl", hash = "sha256:ecddad02bdaf88cfa0a2fe338b1040ffc152dea612c0476b4e18b5d8043dc27e"},
+    {file = "beta9-0.1.13.tar.gz", hash = "sha256:84f4a8fb8dd11c5c93c09208c680077c6f09ae86839c971d5517036061440ddb"},
 ]
 
 [package.dependencies]
@@ -1069,4 +1069,4 @@ watchmedo = ["PyYAML (>=3.10)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8"
-content-hash = "19f89ceace3ecb348796043509883ea6c9ab3b08d8e9609fd5d4f52ea697e759"
+content-hash = "780a637604844b47d2d098965b6cbc2649698ce150c676624cbf6fbbcb8b1881"

@@ -7,6 +7,7 @@ from beta9.abstractions.map import Map
 from beta9.abstractions.queue import SimpleQueue as Queue
 from beta9.abstractions.taskqueue import TaskQueue as task_queue
 from beta9.abstractions.volume import Volume
+from beta9.type import GpuType, PythonVersion
 
 __version__ = "0.2.9"
 __all__ = [
@@ -20,4 +21,6 @@ __all__ = [
     "endpoint",
     "Container",
     "env",
+    "PythonVersion",
+    "GpuType",
 ]

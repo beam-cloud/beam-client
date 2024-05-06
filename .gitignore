@@ -2,3 +2,5 @@ dist/*
 test.py
 test
 __pycache__
+.python-version
+.DS_Store

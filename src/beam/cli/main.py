@@ -4,8 +4,6 @@ from pathlib import Path
 from beta9.cli.main import load_cli
 from beta9.config import SDKSettings
 
-from . import logs
-
 settings = SDKSettings(
     name="Beam",
     api_host=os.getenv("API_HOST", "https://app.beam.cloud"),
@@ -16,4 +14,3 @@ settings = SDKSettings(
 
 
 cli = load_cli(settings=settings)
-cli.register(logs)

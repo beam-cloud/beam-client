@@ -14,3 +14,4 @@ settings = SDKSettings(
 
 
 cli = load_cli(settings=settings)
+cli.load_version("beam-client")

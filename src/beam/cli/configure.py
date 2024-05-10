@@ -40,7 +40,6 @@ def configure(token: str, name: str):
     config_path = settings.config_path
     contexts = load_config(config_path)
 
-    print(contexts)
     if name in contexts:
         text = f"Context '{name}' already exists. Overwrite?"
         if terminal.prompt(text=text, default="n").lower() in ["n", "no"]:

@@ -57,4 +57,4 @@ def configure(ctx: click.Context, service: ServiceClient, token: str, name: str)
 
     save_config(contexts=contexts, path=config_path)
 
-    terminal.success("Configure beam context 🎉!")
+    terminal.success("Configured beam context 🎉!")

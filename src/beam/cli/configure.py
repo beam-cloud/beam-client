@@ -1,7 +1,6 @@
 import click
 from beta9 import terminal
-from beta9.channel import ServiceClient
-from beta9.cli.extraclick import ClickCommonGroup, pass_service_client
+from beta9.cli.extraclick import ClickCommonGroup
 from beta9.config import ConfigContext, get_settings, load_config, save_config
 
 
@@ -36,13 +35,12 @@ def common(**_):
     nargs=1,
     required=True,
 )
-@pass_service_client
-@click.pass_context
-def configure(ctx: click.Context, service: ServiceClient, token: str, name: str):
+def configure(token: str, name: str):
     settings = get_settings()
     config_path = settings.config_path
     contexts = load_config(config_path)
 
+    print(contexts)
     if name in contexts:
         text = f"Context '{name}' already exists. Overwrite?"
         if terminal.prompt(text=text, default="n").lower() in ["n", "no"]:

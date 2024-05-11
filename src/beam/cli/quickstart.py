@@ -12,7 +12,7 @@ def common(**_):
 def quickstart():
     quickstart_raw_url = "https://raw.githubusercontent.com/beam-cloud/examples/main/01_getting_started/quickstart.py"
 
-    terminal.success("Downloading quickstart example...")
+    terminal.header("Downloading quickstart example...")
 
     response = requests.get(quickstart_raw_url)
 

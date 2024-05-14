@@ -4,6 +4,7 @@ from pathlib import Path
 from beta9.cli.main import load_cli
 from beta9.config import SDKSettings
 
+from . import configure
 from . import quickstart
 
 settings = SDKSettings(
@@ -16,5 +17,6 @@ settings = SDKSettings(
 
 
 cli = load_cli(settings=settings)
+cli.register(configure)
 cli.register(quickstart)
 cli.load_version("beam-client")

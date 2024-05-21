@@ -55,17 +55,17 @@ tests = ["mypy (>=0.800)", "pytest", "pytest-asyncio"]
 
 [[package]]
 name = "beta9"
-version = "0.1.25"
+version = "0.1.26"
 description = ""
 optional = false
 python-versions = "<4.0,>=3.8"
 files = [
-    {file = "beta9-0.1.25-py3-none-any.whl", hash = "sha256:8146ade5d23e264a5abd24f1dba565dfbaee4b3341b19b1d4ddd40207f5f6a14"},
-    {file = "beta9-0.1.25.tar.gz", hash = "sha256:e162bf9846d93cc4b88dc49212538c2647533fcfb9f164185fc8cdc2b6e36bd0"},
+    {file = "beta9-0.1.26-py3-none-any.whl", hash = "sha256:7d3193b879506e4d0f1dce45b3f629bc5459253c2c3293cde149034f19d02e73"},
+    {file = "beta9-0.1.26.tar.gz", hash = "sha256:9fcd07fcb9050c20ef8d114c6fab65abca8e30b51225090e00bcafc229671134"},
 ]
 
 [package.dependencies]
-asgiref = ">=3.7.2,<4.0.0"
+asgiref = ">=3.8.1,<4.0.0"
 betterproto = {version = "2.0.0b6", extras = ["compiler"]}
 click = ">=8.1.7,<9.0.0"
 cloudpickle = ">=3.0.0,<4.0.0"
@@ -1216,4 +1216,4 @@ watchmedo = ["PyYAML (>=3.10)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8"
-content-hash = "e4daf0557beb5f5e4288a07da1700e565880e881a1fba99057564c3f29b649dc"
+content-hash = "20056a6c09ace20b9448f2db784cb5f925d2bd62ef09b46c45d51a58d6238a93"

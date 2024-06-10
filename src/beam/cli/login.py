@@ -31,14 +31,31 @@ def login():
     httpd.serve_forever()
 
 
-def generate_user_code():
-    code_set = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    code = ""
+def handle_login_request(token):
+    settings = get_settings()
+    config_path = settings.config_path
+    contexts = load_config(config_path)
+    name = "default"
 
-    for _ in range(6):
-        code += code_set[random.randint(0, len(code_set) - 1)]
+    while name in contexts and contexts[name].token:
+        text = f"Context '{name}' already exists. Do you want to create a new context? (y/n)"
+        if terminal.prompt(text=text, default="n").lower() in ["n", "no"]:
+            exit(0)
 
-    return code
+        name = terminal.prompt(text="Enter context name", default="default")
+
+    context = ConfigContext(
+        token=token,
+        gateway_host=settings.gateway_host,
+        gateway_port=settings.gateway_port,
+    )
+
+    # Save context to config
+    contexts[name] = context
+
+    save_config(contexts=contexts, path=config_path)
+
+    terminal.success("Configured beam context 🎉!")
 
 
 class HandleLoginBrowserResponse(SimpleHTTPRequestHandler):
@@ -48,32 +65,7 @@ class HandleLoginBrowserResponse(SimpleHTTPRequestHandler):
             data = json.loads(data)
             token = data.get("token")
 
-            settings = get_settings()
-            config_path = settings.config_path
-            contexts = load_config(config_path)
-            name = "default"
-
-            while name in contexts and contexts[name].token:
-                text = (
-                    f"Context '{name}' already exists. Do you want to create a new context? (y/n)"
-                )
-                if terminal.prompt(text=text, default="n").lower() in ["n", "no"]:
-                    exit(0)
-
-                name = terminal.prompt(text="Enter context name", default="default")
-
-            context = ConfigContext(
-                token=token,
-                gateway_host=settings.gateway_host,
-                gateway_port=settings.gateway_port,
-            )
-
-            # Save context to config
-            contexts[name] = context
-
-            save_config(contexts=contexts, path=config_path)
-
-            terminal.success("Configured beam context 🎉!")
+            handle_login_request(token)
 
             self.send_response(200)
             self.end_headers()
@@ -95,3 +87,13 @@ class HandleLoginBrowserResponse(SimpleHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(200)
         self.end_headers()
+
+
+def generate_user_code():
+    code_set = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    code = ""
+
+    for _ in range(6):
+        code += code_set[random.randint(0, len(code_set) - 1)]
+
+    return code

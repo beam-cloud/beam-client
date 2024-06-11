@@ -16,9 +16,7 @@ def common(**_):
 
 @common.command(
     name="login",
-    help="""
-  Login from dashboard
-  """,
+    help="""Login from dashboard""",
 )
 @click.option("--dashboard-url", envvar="DASHBOARD_URL", default="https://platform.beam.cloud")
 def login(dashboard_url: str):

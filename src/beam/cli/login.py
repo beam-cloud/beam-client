@@ -78,6 +78,12 @@ class HandleLoginBrowserResponse(SimpleHTTPRequestHandler):
         finally:
             exit(0)
 
+    def do_OPTIONS(self):
+        # Browsers send an OPTIONS request before POST to check if the server allows the request
+        # We respond with the allowed methods and origins for CORS
+        self.send_response(200)
+        self.end_headers()
+
     def end_headers(self):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
@@ -89,10 +95,6 @@ class HandleLoginBrowserResponse(SimpleHTTPRequestHandler):
 
     def log_error(self, *args, **kwargs):
         return
-
-    def do_OPTIONS(self):
-        self.send_response(200)
-        self.end_headers()
 
 
 def generate_user_code():

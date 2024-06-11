@@ -1,5 +1,4 @@
 import json
-import os
 import random
 import string
 import webbrowser
@@ -21,7 +20,7 @@ def common(**_):
   Login from dashboard
   """,
 )
-@click.option("--dashboard-url", default=os.getenv("DASHBOARD_URL", "https://platform.beam.cloud"))
+@click.option("--dashboard-url", envvar="DASHBOARD_URL", default="https://platform.beam.cloud")
 def login(dashboard_url: str):
     user_code = generate_user_code()
     terminal.header(f"Login from dashboard with code: {user_code}")

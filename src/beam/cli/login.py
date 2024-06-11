@@ -24,7 +24,7 @@ def common(**_):
 @click.option("--dashboard-url", default=os.getenv("DASHBOARD_URL", "https://platform.beam.cloud"))
 def login(dashboard_url: str):
     user_code = generate_user_code()
-    print("Login from dashboard with code:", user_code)
+    terminal.header(f"Login from dashboard with code: {user_code}")
 
     webbrowser.open(f"{dashboard_url}/auth/cli-login?user_code={user_code}", new=2)
 

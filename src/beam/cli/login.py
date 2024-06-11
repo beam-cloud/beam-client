@@ -1,6 +1,7 @@
 import json
 import os
 import random
+import string
 import webbrowser
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 
@@ -20,11 +21,11 @@ def common(**_):
   Login from dashboard
   """,
 )
-def login():
+@click.option("--dashboard-url", default=os.getenv("DASHBOARD_URL", "https://platform.beam.cloud"))
+def login(dashboard_url: str):
     user_code = generate_user_code()
     print("Login from dashboard with code:", user_code)
 
-    dashboard_url = os.getenv("BETA9_DASHBOARD_URL", "https://platform.beam.cloud")
     webbrowser.open(f"{dashboard_url}/auth/cli-login?user_code={user_code}", new=2)
 
     httpd = HTTPServer(("", 3333), HandleLoginBrowserResponse)
@@ -65,6 +66,11 @@ class HandleLoginBrowserResponse(SimpleHTTPRequestHandler):
             data = json.loads(data)
             token = data.get("token")
 
+            if not token:
+                self.send_response(400)
+                self.end_headers()
+                return
+
             handle_login_request(token)
 
             self.send_response(200)
@@ -90,7 +96,7 @@ class HandleLoginBrowserResponse(SimpleHTTPRequestHandler):
 
 
 def generate_user_code():
-    code_set = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    code_set = string.digits + string.ascii_uppercase
     code = ""
 
     for _ in range(6):

@@ -69,7 +69,6 @@ class HandleLoginBrowserResponse(SimpleHTTPRequestHandler):
                 return
 
             handle_login_request(token)
-
             self.send_response(200)
             self.end_headers()
         finally:
@@ -84,7 +83,7 @@ class HandleLoginBrowserResponse(SimpleHTTPRequestHandler):
     def end_headers(self):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "*")
         SimpleHTTPRequestHandler.end_headers(self)
 
     def log_message(self, *args, **kwargs):

@@ -66,7 +66,8 @@ jobs:
       - name: Build binary
         id: build-binary
         env:
-          PYAPP_PROJECT_NAME: "beam"
+          PYAPP_PROJECT_NAME: "beam-client"
+          PYAPP_EXEC_MODULE: "beam"
           PYAPP_PROJECT_VERSION: "${{ steps.set-build-info.outputs.app_version }}"
           PYAPP_FULL_ISOLATION: "true"
           PYAPP_DISTRIBUTION_EMBED: "true"
@@ -75,14 +76,14 @@ jobs:
 
           cargo build --release
 
-          mv target/release/pyapp ${PYAPP_PROJECT_NAME}
+          mv target/release/pyapp ${PYAPP_EXEC_MODULE}
 
-          NAME=${PYAPP_PROJECT_NAME}-${PYAPP_PROJECT_VERSION}-${{ steps.set-build-info.outputs.os_name }}-${{ steps.set-build-info.outputs.arch }}
+          NAME=${PYAPP_EXEC_MODULE}-${PYAPP_PROJECT_VERSION}-${{ steps.set-build-info.outputs.os_name }}-${{ steps.set-build-info.outputs.arch }}
           TAR_FILE_NAME=${NAME}.tar.gz
-          tar -cvf ${TAR_FILE_NAME} ${PYAPP_PROJECT_NAME}
+          tar -cvf ${TAR_FILE_NAME} ${PYAPP_EXEC_MODULE}
 
           echo "art_name=${NAME}" >> $GITHUB_OUTPUT
-          echo "bin_file_path=$(pwd)/${PYAPP_PROJECT_NAME}" >> $GITHUB_OUTPUT
+          echo "bin_file_path=$(pwd)/${PYAPP_EXEC_MODULE}" >> $GITHUB_OUTPUT
           echo "tar_file_path=$(pwd)/${TAR_FILE_NAME}" >> $GITHUB_OUTPUT
 
       - name: Upload artifact to workflow

@@ -1,6 +1,9 @@
 name: Build and release CLI
 
 on:
+  push:
+    branches:
+      - np/actions
   release:
     types: [created]
   workflow_dispatch:
@@ -17,15 +20,30 @@ permissions:
 jobs:
   build:
     if: startsWith(github.ref, 'refs/tags/cli-') || inputs.app_version != ''
-    runs-on: ${{ matrix.os }}
     outputs:
       app_version: ${{ steps.set-build-info.outputs.app_version }}
 
     strategy:
       matrix:
-        os: [macos-latest, ubuntu-latest]
-        arch: [aarch64, x86_64]
+        platform:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            bin: beam
+            name: beam-darwin-arm64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            bin: beam
+            name: beam-darwin-amd64
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            bin: beam
+            name: beam-linux-amd64
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            bin: beam
+            name: beam-linux-arm64
 
+    runs-on: ${{ matrix.platform.os }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -39,24 +57,10 @@ jobs:
             echo "app_version=${GITHUB_REF_NAME#cli-}" >> $GITHUB_OUTPUT
           fi
 
-          if [[ "${{ matrix.arch }}" == "aarch64" ]]; then
-            echo "os_arch=arm64" >> $GITHUB_OUTPUT
-          else
-            echo "os_arch=amd64" >> $GITHUB_OUTPUT
-          fi
-
-          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
-            echo "os_name=linux" >> $GITHUB_OUTPUT
-            echo "target_triple=${{ matrix.arch }}-unknown-linux-gnu" >> $GITHUB_OUTPUT
-          elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
-            echo "os_name=darwin" >> $GITHUB_OUTPUT
-            echo "target_triple=${{ matrix.arch }}-apple-darwin" >> $GITHUB_OUTPUT
-          fi
-
       - name: Setup Rust
         uses: moonrepo/setup-rust@v1
         with:
-          targets: "${{ steps.set-build-info.outputs.target_triple }}"
+          targets: "${{ matrix.platform.target }}"
 
       - name: Setup PyApp
         id: setup-pyapp
@@ -68,37 +72,30 @@ jobs:
           mv pyapp-v* pyapp-latest
 
       - name: Build binary
-        id: build-binary
+        uses: houseabsolute/actions-rust-cross@v0.0.13
         env:
           PYAPP_PROJECT_NAME: "beam-client"
           PYAPP_EXEC_MODULE: "beam"
           PYAPP_PROJECT_VERSION: "${{ steps.set-build-info.outputs.app_version }}"
           PYAPP_FULL_ISOLATION: "true"
           PYAPP_DISTRIBUTION_EMBED: "true"
-        run: |
-          cd pyapp-latest
+        with:
+          command: "build"
+          target: "${{ matrix.platform.target }}"
+          args: "--release --locked"
+          strip: true
+          working-directory: pyapp-latest
+          # cross-version: v0.2.5
 
-          if [[ "${{ steps.set-build-info.outputs.target_triple }}" == "aarch64-unknown-linux-gnu" ]]; then
-            sudo apt-get install gcc-aarch64-linux-gnu
-          fi
-
-          cargo build --release --target ${{ steps.set-build-info.outputs.target_triple }}
-
-          mv target/${{ steps.set-build-info.outputs.target_triple }}/release/pyapp ${PYAPP_EXEC_MODULE}
-
-          NAME=${PYAPP_EXEC_MODULE}-${PYAPP_PROJECT_VERSION}-${{ steps.set-build-info.outputs.os_name }}-${{ steps.set-build-info.outputs.os_arch }}
-          TAR_FILE_NAME=${NAME}.tar.gz
-          tar -cvzf ${TAR_FILE_NAME} ${PYAPP_EXEC_MODULE}
-
-          echo "art_name=${NAME}" >> $GITHUB_OUTPUT
-          echo "bin_file_path=$(pwd)/${PYAPP_EXEC_MODULE}" >> $GITHUB_OUTPUT
-          echo "tar_file_path=$(pwd)/${TAR_FILE_NAME}" >> $GITHUB_OUTPUT
+      - name: Rename binary (linux and macos)
+        run: mv -v pyapp-latest/target/${{ matrix.platform.target }}/release/pyapp pyapp-latest/target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }}
+        if: matrix.platform.os != 'windows-latest'
 
       - name: Upload artifact to workflow
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.build-binary.outputs.art_name }}
-          path: ${{ steps.build-binary.outputs.bin_file_path }}
+          name: ${{ matrix.platform.name }}
+          path: pyapp-latest/target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }}
           if-no-files-found: ignore
           compression-level: "9"
 

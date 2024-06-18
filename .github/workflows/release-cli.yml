@@ -24,7 +24,7 @@ jobs:
     strategy:
       matrix:
         os: [macos-latest, ubuntu-latest]
-        arch: [x86_64, arm64]
+        arch: [aarch64, x86_64]
 
     steps:
       - name: Checkout repository
@@ -39,16 +39,18 @@ jobs:
             echo "app_version=${GITHUB_REF_NAME#cli-}" >> $GITHUB_OUTPUT
           fi
 
-          if [[ "${{ matrix.arch }}" == "arm64" ]]; then
-            echo "arch=arm64" >> $GITHUB_OUTPUT
+          if [[ "${{ matrix.arch }}" == "aarch64" ]]; then
+            echo "os_arch=arm64" >> $GITHUB_OUTPUT
           else
-            echo "arch=amd64" >> $GITHUB_OUTPUT
+            echo "os_arch=amd64" >> $GITHUB_OUTPUT
           fi
 
           if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
             echo "os_name=linux" >> $GITHUB_OUTPUT
+            echo "target_triple=${{ matrix.arch }}-unknown-linux-gnu" >> $GITHUB_OUTPUT
           elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
             echo "os_name=darwin" >> $GITHUB_OUTPUT
+            echo "target_triple=${{ matrix.arch }}-apple-darwin" >> $GITHUB_OUTPUT
           fi
 
       - name: Setup Rust
@@ -74,13 +76,14 @@ jobs:
         run: |
           cd pyapp-latest
 
-          cargo build --release
+          rustup target add ${{ steps.set-build-info.outputs.target_triple }}
+          cargo build --release --target ${{ steps.set-build-info.outputs.target_triple }}
 
-          mv target/release/pyapp ${PYAPP_EXEC_MODULE}
+          mv target/${{ steps.set-build-info.outputs.target_triple }}/release/pyapp ${PYAPP_EXEC_MODULE}
 
-          NAME=${PYAPP_EXEC_MODULE}-${PYAPP_PROJECT_VERSION}-${{ steps.set-build-info.outputs.os_name }}-${{ steps.set-build-info.outputs.arch }}
+          NAME=${PYAPP_EXEC_MODULE}-${PYAPP_PROJECT_VERSION}-${{ steps.set-build-info.outputs.os_name }}-${{ steps.set-build-info.outputs.os_arch }}
           TAR_FILE_NAME=${NAME}.tar.gz
-          tar -cvf ${TAR_FILE_NAME} ${PYAPP_EXEC_MODULE}
+          tar -cvzf ${TAR_FILE_NAME} ${PYAPP_EXEC_MODULE}
 
           echo "art_name=${NAME}" >> $GITHUB_OUTPUT
           echo "bin_file_path=$(pwd)/${PYAPP_EXEC_MODULE}" >> $GITHUB_OUTPUT
@@ -102,6 +105,7 @@ jobs:
           gh release upload ${GITHUB_REF_NAME} "${{ steps.build-binary.outputs.tar_file_path }}"
 
   formula:
+    if: startsWith(github.ref, 'refs/tags/cli-') || inputs.app_version != ''
     needs: build
     runs-on: ubuntu-latest
     steps:

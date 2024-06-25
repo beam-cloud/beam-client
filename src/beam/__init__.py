@@ -8,7 +8,7 @@ from beta9.abstractions.output import Output
 from beta9.abstractions.queue import SimpleQueue as Queue
 from beta9.abstractions.taskqueue import TaskQueue as task_queue
 from beta9.abstractions.volume import Volume
-from beta9.type import GpuType, PythonVersion
+from beta9.type import GpuType, PythonVersion, QueueDepthAutoscaler
 
 __all__ = [
     "Map",
@@ -23,4 +23,5 @@ __all__ = [
     "PythonVersion",
     "GpuType",
     "Output",
+    "QueueDepthAutoscaler",
 ]

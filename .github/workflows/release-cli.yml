@@ -9,10 +9,6 @@ on:
         description: Semantic version of release
         required: true
         type: string
-      app_name:
-        description: Determines the binary, archive, artifact, and formula names
-        type: string
-        default: beam
 
 defaults:
   run:
@@ -28,6 +24,7 @@ jobs:
     name: build (${{ matrix.platform.target_alt }})
     timeout-minutes: 10
     outputs:
+      app_name: ${{ steps.set-build-info.outputs.app_name }}
       app_version: ${{ steps.set-build-info.outputs.app_version }}
 
     strategy:
@@ -36,23 +33,23 @@ jobs:
           - os: macos-latest
             target: aarch64-apple-darwin
             target_alt: darwin-arm64
-            bin_name: ${{ inputs.app_name }}
+            bin_name: beam
           - os: macos-latest
             target: x86_64-apple-darwin
             target_alt: darwin-amd64
-            bin_name: ${{ inputs.app_name }}
+            bin_name: beam
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             target_alt: linux-amd64
-            bin_name: ${{ inputs.app_name }}
+            bin_name: beam
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             target_alt: linux-arm64
-            bin_name: ${{ inputs.app_name }}
+            bin_name: beam
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             target_alt: windows-amd64
-            bin_name: ${{ inputs.app_name }}.exe
+            bin_name: beam.exe
 
     runs-on: ${{ matrix.platform.os }}
     steps:
@@ -62,6 +59,9 @@ jobs:
       - name: Set build info
         id: set-build-info
         run: |
+          app_name=${{ matrix.platform.bin_name }}
+          echo "app_name=${app_name%.exe}" >> $GITHUB_OUTPUT
+
           if [[ ! -z "${{ inputs.app_version }}" ]]; then
             echo "app_version=${{ inputs.app_version }}" >> $GITHUB_OUTPUT
           else
@@ -85,7 +85,7 @@ jobs:
         uses: houseabsolute/actions-rust-cross@v0.0.13
         env:
           PYAPP_PROJECT_NAME: "beam-client"
-          PYAPP_EXEC_MODULE: "${{ inputs.app_name }}"
+          PYAPP_EXEC_MODULE: "${{ steps.set-build-info.outputs.app_name }}"
           PYAPP_PROJECT_VERSION: "${{ steps.set-build-info.outputs.app_version }}"
           PYAPP_FULL_ISOLATION: "true"
           PYAPP_DISTRIBUTION_EMBED: "true"
@@ -109,7 +109,7 @@ jobs:
       - name: Upload artifact to actions run
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.app_name }}-${{ steps.set-build-info.outputs.app_version }}-${{ matrix.platform.target_alt }}
+          name: ${{ steps.set-build-info.outputs.app_name }}-${{ steps.set-build-info.outputs.app_version }}-${{ matrix.platform.target_alt }}
           path: ${{ matrix.platform.bin_name }}
           if-no-files-found: ignore
           compression-level: "9"
@@ -134,7 +134,7 @@ jobs:
           event-type: update-formula
           client-payload: |-
             {
-              "name": "${{ inputs.app_name }}",
+              "name": "${{ needs.build.outputs.app_name }}",
               "version": "${{ needs.build.outputs.app_version }}",
               "tag": "${{ github.ref_name }}",
               "repo": "${{ github.repository }}"

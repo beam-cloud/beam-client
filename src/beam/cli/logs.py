@@ -1,11 +1,15 @@
 import datetime
 import json
+import time
+from threading import Thread
 from typing import Any, Optional, Union
 
 import click
 from beta9 import terminal
 from beta9.config import DEFAULT_CONTEXT_NAME, get_settings, load_config
-from websockets.sync.client import connect
+from websockets.sync.client import ClientConnection, connect
+
+keep_alive_enabled = True
 
 
 def get_setting_callback(ctx: click.Context, param: click.Parameter, value: Any):
@@ -103,6 +107,9 @@ def logs(
     )
 
     with connect(**websocket_params) as w, terminal.progress("Streaming..."):
+        keep_alive = Thread(target=websocket_keep_alive, args=(w,))
+        keep_alive.start()
+
         w.send(logs_before)
         print_message(w.recv())
 
@@ -111,11 +118,36 @@ def logs(
             while True:
                 print_message(w.recv())
         except KeyboardInterrupt:
+            global keep_alive_enabled
+            keep_alive_enabled = False
             terminal.print("\rGoodbye! 👋")
 
 
 def print_message(msg: Union[str, bytes]) -> None:
     data = json.loads(msg)
-    hits = sorted(data["logs"]["hits"]["hits"], key=lambda k: k["_source"]["@timestamp"])
+    try:
+        hits = data["logs"]["hits"]["hits"]
+    except KeyError:
+        terminal.warn(f"Unable to parse message: {data}")
+        return
+
+    hits = sorted(hits, key=lambda k: k["_source"]["@timestamp"])
     for hit in hits:
         terminal.print(hit["_source"]["msg"], highlight=True, end="")
+
+
+def websocket_keep_alive(conn: ClientConnection, interval: int = 30):
+    """
+    Keeps the websocket connection alive until `keep_alive_enabled`
+    is set to `False`.
+
+    Args:
+        conn: A websocket client connection.
+        interval: Number of seconds between sending pings.
+    """
+    while keep_alive_enabled:
+        conn.ping()
+        for _ in range(interval):
+            if not keep_alive_enabled:
+                break
+            time.sleep(1)

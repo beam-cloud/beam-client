@@ -23,7 +23,13 @@ def common(**_):
 
 @common.command(
     name="logs",
-    help="Follow logs of a deployment or a task.",
+    help="Follow logs of a deployment, task, or container.",
+)
+@click.option(
+    "--deployment-id",
+    type=click.STRING,
+    required=False,
+    help="",
 )
 @click.option(
     "--task-id",
@@ -32,7 +38,7 @@ def common(**_):
     help="",
 )
 @click.option(
-    "--deployment-id",
+    "--container-id",
     type=click.STRING,
     required=False,
     help="",
@@ -63,13 +69,14 @@ def common(**_):
 def logs(
     task_id: Optional[str],
     deployment_id: Optional[str],
+    container_id: Optional[str],
     lines: int,
     realtime_host: str,
     config_path: str,
 ):
-    if bool(deployment_id) == bool(task_id):
+    if bool(deployment_id) == bool(task_id) == bool(container_id):
         raise click.BadArgumentUsage(
-            "Must supply either --deployment-id or --task-id, but not both."
+            "Must supply either --deployment-id, --task-id, or --container-id, but not all three."
         )
 
     contexts = load_config(config_path)
@@ -80,15 +87,22 @@ def logs(
         "additional_headers": {"X-BEAM-CLIENT": "CLI"},
     }
 
+    object_id = deployment_id or task_id or container_id
+    object_type = {
+        deployment_id: "BETA9_DEPLOYMENT",
+        task_id: "BETA9_TASK",
+        container_id: "BETA9_CONTAINER",
+    }.get(object_id, "")
     now = datetime.datetime.now(datetime.timezone.utc)
+
     logs_before = json.dumps(
         {
             "token": context.token,
             "streamType": "LOGS_STREAM",
             "action": "LOGS_QUERY",
             "stream": False,
-            "objectType": "BETA9_TASK" if task_id else "BETA9_DEPLOYMENT",
-            "objectId": task_id or deployment_id,
+            "objectType": object_type,
+            "objectId": object_id,
             "size": lines,
             "endingTimestamp": now.isoformat(),
         }
@@ -100,8 +114,8 @@ def logs(
             "streamType": "LOGS_STREAM",
             "action": "LOGS_ADD_STREAM",
             "stream": True,
-            "objectType": "BETA9_TASK" if task_id else "BETA9_DEPLOYMENT",
-            "objectId": task_id or deployment_id,
+            "objectType": object_type,
+            "objectId": object_id,
             "startingTimestamp": now.isoformat(),
         }
     )

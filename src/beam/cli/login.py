@@ -48,7 +48,7 @@ def handle_login_request(token: str):
 
         text = "Do you want to create a new context? (y/n)"
         if terminal.prompt(text=text, default="n").lower() in ["y", "yes"]:
-            context_name = terminal.prompt(text="Enter context name", default="")
+            context_name = terminal.prompt(text="Enter context name", default=None)
             if not context_name:
                 continue
             name = context_name

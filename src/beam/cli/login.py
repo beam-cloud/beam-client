@@ -21,26 +21,35 @@ def common(**_):
 @click.option("--dashboard-url", envvar="DASHBOARD_URL", default="https://platform.beam.cloud")
 def login(dashboard_url: str):
     user_code = generate_user_code()
-    terminal.header(f"Login from dashboard with code: {user_code}")
+    terminal.header(f"Login from dashboard with code: [bold yellow]{user_code}")
 
-    webbrowser.open(f"{dashboard_url}/auth/cli-login?user_code={user_code}", new=2)
+    url = f"{dashboard_url}/auth/cli-login?user_code={user_code}"
+    terminal.header(
+        f"If the browser does not open automatically, please visit this link: [bold yellow]{url}"
+    )
+    webbrowser.open(url, new=2)
 
     httpd = HTTPServer(("", 3333), HandleLoginBrowserResponse)
     httpd.serve_forever()
 
 
-def handle_login_request(token):
+def handle_login_request(token: str):
     settings = get_settings()
     config_path = settings.config_path
     contexts = load_config(config_path)
     name = "default"
 
     while name in contexts and contexts[name].token:
-        text = f"Context '{name}' already exists. Do you want to create a new context? (y/n)"
-        if terminal.prompt(text=text, default="n").lower() in ["n", "no"]:
-            exit(0)
+        terminal.print(f"Context '{name}' already exists.")
 
-        name = terminal.prompt(text="Enter context name", default="default")
+        text = "Do you want to overwrite this context? (y/n)"
+        if terminal.prompt(text=text, default="n").lower() in ["y", "yes"]:
+            break
+
+        text = "Do you want to create a new context? (y/n)"
+        if terminal.prompt(text=text, default="n").lower() in ["y", "yes"]:
+            name = terminal.prompt(text="Enter context name", default=name)
+            break
 
     context = ConfigContext(
         token=token,

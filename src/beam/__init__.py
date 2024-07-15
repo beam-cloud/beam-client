@@ -1,4 +1,5 @@
 from beta9 import env
+from beta9.abstractions import experimental
 from beta9.abstractions.container import Container
 from beta9.abstractions.endpoint import Endpoint as endpoint
 from beta9.abstractions.function import Function as function
@@ -24,4 +25,5 @@ __all__ = [
     "GpuType",
     "Output",
     "QueueDepthAutoscaler",
+    "experimental",
 ]

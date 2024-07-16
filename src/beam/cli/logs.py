@@ -12,6 +12,11 @@ from websockets.sync.client import ClientConnection, connect
 keep_alive_enabled = True
 
 
+def exit_keep_alive_thread():
+    global keep_alive_enabled
+    keep_alive_enabled = False
+
+
 def get_setting_callback(ctx: click.Context, param: click.Parameter, value: Any):
     return getattr(get_settings(), param.name) if not value else value
 
@@ -95,54 +100,62 @@ def logs(
     }.get(object_id, "")
     now = datetime.datetime.now(datetime.timezone.utc)
 
-    logs_before = json.dumps(
-        {
-            "token": context.token,
-            "streamType": "LOGS_STREAM",
-            "action": "LOGS_QUERY",
-            "stream": False,
-            "objectType": object_type,
-            "objectId": object_id,
-            "size": lines,
-            "endingTimestamp": now.isoformat(),
-        }
-    )
+    logs_before = json.dumps({
+        "token": context.token,
+        "streamType": "LOGS_STREAM",
+        "action": "LOGS_QUERY",
+        "stream": False,
+        "objectType": object_type,
+        "objectId": object_id,
+        "size": lines,
+        "endingTimestamp": now.isoformat(),
+    })
 
-    logs_current = json.dumps(
-        {
-            "token": context.token,
-            "streamType": "LOGS_STREAM",
-            "action": "LOGS_ADD_STREAM",
-            "stream": True,
-            "objectType": object_type,
-            "objectId": object_id,
-            "startingTimestamp": now.isoformat(),
-        }
-    )
+    logs_current = json.dumps({
+        "token": context.token,
+        "streamType": "LOGS_STREAM",
+        "action": "LOGS_ADD_STREAM",
+        "stream": True,
+        "objectType": object_type,
+        "objectId": object_id,
+        "startingTimestamp": now.isoformat(),
+    })
 
-    with connect(**websocket_params) as w, terminal.progress("Streaming..."):
+    with connect(**websocket_params) as w, terminal.progress("Streaming...") as p:
         keep_alive = Thread(target=websocket_keep_alive, args=(w,))
         keep_alive.start()
 
-        w.send(logs_before)
-        print_message(w.recv())
-
-        w.send(logs_current)
         try:
+            w.send(logs_before)
+            print_message(w.recv())
+        except Exception as e:
+            p.stop()
+            exit_keep_alive_thread()
+            terminal.error(str(e))
+
+        try:
+            w.send(logs_current)
             while True:
                 print_message(w.recv())
         except KeyboardInterrupt:
-            global keep_alive_enabled
-            keep_alive_enabled = False
-            terminal.print("\rGoodbye! 👋")
+            p.stop()
+            exit_keep_alive_thread()
+            terminal.print("Goodbye! 👋")
+        except Exception as e:
+            p.stop()
+            exit_keep_alive_thread()
+            terminal.error(str(e))
 
 
 def print_message(msg: Union[str, bytes]) -> None:
     data = json.loads(msg)
-    try:
+    if "logs" in data:
         hits = data["logs"]["hits"]["hits"]
-    except KeyError:
-        terminal.warn(f"Unable to parse message: {data}")
+    elif "error" in data:
+        exit_keep_alive_thread()
+        terminal.error(str(data["error"]).capitalize())
+    else:
+        terminal.warn(f"Unable to parse data: {data}")
         return
 
     hits = sorted(hits, key=lambda k: k["_source"]["@timestamp"])
@@ -150,7 +163,7 @@ def print_message(msg: Union[str, bytes]) -> None:
         terminal.print(hit["_source"]["msg"], highlight=True, end="")
 
 
-def websocket_keep_alive(conn: ClientConnection, interval: int = 30):
+def websocket_keep_alive(conn: ClientConnection, interval: int = 60):
     """
     Keeps the websocket connection alive until `keep_alive_enabled`
     is set to `False`.
@@ -164,4 +177,4 @@ def websocket_keep_alive(conn: ClientConnection, interval: int = 30):
         for _ in range(interval):
             if not keep_alive_enabled:
                 break
-            time.sleep(1)
+            time.sleep(0.5)

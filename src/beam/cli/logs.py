@@ -28,7 +28,13 @@ def common(**_):
 
 @common.command(
     name="logs",
-    help="Follow logs of a deployment, task, or container.",
+    help="Follow logs of a stub, deployment, task, or container.",
+)
+@click.option(
+    "--stub-id",
+    type=click.STRING,
+    required=False,
+    help="",
 )
 @click.option(
     "--deployment-id",
@@ -72,6 +78,7 @@ def common(**_):
     hidden=True,
 )
 def logs(
+    stub_id: Optional[str],
     task_id: Optional[str],
     deployment_id: Optional[str],
     container_id: Optional[str],
@@ -79,9 +86,9 @@ def logs(
     realtime_host: str,
     config_path: str,
 ):
-    if bool(deployment_id) == bool(task_id) == bool(container_id):
+    if bool(deployment_id) == bool(stub_id) == bool(task_id) == bool(container_id):
         raise click.BadArgumentUsage(
-            "Must supply either --deployment-id, --task-id, or --container-id, but not all three."
+            "Must supply either --stub-id, --deployment-id, --task-id, or --container-id, but not all four."
         )
 
     contexts = load_config(config_path)
@@ -92,9 +99,10 @@ def logs(
         "additional_headers": {"X-BEAM-CLIENT": "CLI"},
     }
 
-    object_id = deployment_id or task_id or container_id
+    object_id = stub_id or deployment_id or task_id or container_id
     object_type = {
         deployment_id: "BETA9_DEPLOYMENT",
+        stub_id: "BETA9_STUB",
         task_id: "BETA9_TASK",
         container_id: "BETA9_CONTAINER",
     }.get(object_id, "")

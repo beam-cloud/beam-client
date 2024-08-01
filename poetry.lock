@@ -55,32 +55,30 @@ tests = ["mypy (>=0.800)", "pytest", "pytest-asyncio"]
 
 [[package]]
 name = "beta9"
-version = "0.1.60"
+version = "0.1.64"
 description = ""
 optional = false
-python-versions = "^3.8"
-files = []
-develop = false
+python-versions = "<4.0,>=3.8"
+files = [
+    {file = "beta9-0.1.64-py3-none-any.whl", hash = "sha256:a116cce456567634fd49f9db7798a3f573fadd26fd7e579d58f7a287457e9876"},
+    {file = "beta9-0.1.64.tar.gz", hash = "sha256:d99d3f7dbdb2ce1cce456bcdfc8a8c44a8ee3ccb1494e69cafba84b885ad4546"},
+]
 
 [package.dependencies]
-asgiref = "^3.8.1"
+asgiref = ">=3.8.1,<4.0.0"
 betterproto-beta9 = {version = "2.0.0b7", extras = ["compiler"]}
-click = "^8.1.7"
-cloudpickle = "^3.0.0"
-croniter = "^2.0.3"
-fastapi = "^0.110.2"
-grpcio = "^1.60.0"
-grpclib = "^0.4.7"
-protobuf = "^4.25.1"
-rich = "^13.7.0"
-typeguard = "^2.13.3"
-typing-extensions = "^4.7.1"
-uvicorn = "^0.29.0"
-watchdog = "^4.0.0"
-
-[package.source]
-type = "directory"
-url = "../beta9/sdk"
+click = ">=8.1.7,<9.0.0"
+cloudpickle = ">=3.0.0,<4.0.0"
+croniter = ">=2.0.3,<3.0.0"
+fastapi = ">=0.110.2,<0.111.0"
+grpcio = ">=1.60.0,<2.0.0"
+grpclib = ">=0.4.7,<0.5.0"
+protobuf = ">=4.25.1,<5.0.0"
+rich = ">=13.7.0,<14.0.0"
+typeguard = ">=2.13.3,<3.0.0"
+typing-extensions = ">=4.7.1,<5.0.0"
+uvicorn = ">=0.29.0,<0.30.0"
+watchdog = ">=4.0.0,<5.0.0"
 
 [[package]]
 name = "betterproto-beta9"
@@ -1318,4 +1316,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8"
-content-hash = "5c538fa5b79f2e17e461e082966431feb5445f926d3b4c77fe737fbfcdf6d7c8"
+content-hash = "4237ccb0aab4160674c2b6df8aa419b917075ac3f6c764eec22f7a1c4468d7be"

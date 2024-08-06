@@ -58,21 +58,31 @@ def create_app(ctx: click.Context, name: str):
     required=True,
 )
 def download_example(name: str):
+    terminal.header("Downloading contents")
     dirs = download_repo()
     if not dirs:
         return terminal.error(f"No files found in the repository {repo_uri}.")
 
-    app_dir = find_app_dirs_by_name(name, dirs)
-    if not app_dir:
-        return terminal.error(f"App example '{name}' not found in repository {repo_uri}.")
+    if name == "all":
+        terminal.header("Getting all examples")
+        app_dirs = find_app_dirs(dirs)
+        if not app_dirs:
+            return terminal.error(f"No example apps found in repository {repo_uri}.")
+    else:
+        terminal.header(f"Getting {name} example")
+        app_dir = find_app_dirs_by_name(name, dirs)
+        if not app_dir:
+            return terminal.error(f"App example '{name}' not found in repository {repo_uri}.")
+        app_dirs = [app_dir]
 
-    terminal.header(f"Creating app {name}...")
-    for file in app_dir.files:
-        terminal.detail(f"Writing {file.path}")
-        file.path.parent.mkdir(parents=True, exist_ok=True)
-        file.path.write_bytes(file.content)
+    for app in app_dirs:
+        terminal.header(f"Writing {app.path} example")
+        for file in app.files:
+            path = "examples" / file.path if name == "all" else file.path
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(file.content)
 
-    terminal.success(f"App example '{name}' created! 🎉")
+    terminal.success("=> Completed! 🎉")
 
 
 @management.command(
@@ -89,6 +99,12 @@ def list_examples():
         box=box.SIMPLE,
     )
 
+    if app_dirs:
+        table.add_row(
+            "all",
+            terminal.humanize_memory(sum(len(f.content) for app in app_dirs for f in app.files)),
+        )
+
     for app in app_dirs:
         table.add_row(
             app.path.as_posix(),
@@ -96,7 +112,7 @@ def list_examples():
         )
 
     table.add_section()
-    table.add_row(f"[bold]{len(app_dirs)} items")
+    table.add_row(f"[bold]{len(app_dirs) + 1} items")
     terminal.print(table)
 
 

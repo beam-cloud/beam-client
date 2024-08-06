@@ -2,7 +2,7 @@ import io
 import os
 import zipfile
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import DefaultDict, List, Optional
 
@@ -58,11 +58,11 @@ def create_app(ctx: click.Context, name: str):
     required=True,
 )
 def download_example(name: str):
-    files = download_repo()
-    if not files:
+    dirs = download_repo()
+    if not dirs:
         return terminal.error(f"No files found in the repository {repo_uri}.")
 
-    app_dir = find_app_dirs_by_name(name, files)
+    app_dir = find_app_dirs_by_name(name, dirs)
     if not app_dir:
         return terminal.error(f"App example '{name}' not found in repository {repo_uri}.")
 
@@ -80,8 +80,8 @@ def download_example(name: str):
     help="List all available example apps.",
 )
 def list_examples():
-    files = download_repo()
-    app_dirs = find_app_dirs(files)
+    dirs = download_repo()
+    app_dirs = find_app_dirs(dirs)
 
     table = Table(
         Column("Name"),
@@ -107,12 +107,15 @@ class RepoFile:
 
 
 @dataclass
-class AppDir:
-    path: Path
-    files: List[RepoFile]
+class RepoDir:
+    path: Path = Path()
+    files: List[RepoFile] = field(default_factory=list)
 
 
-def download_repo(url: str = repo_archive_uri) -> List[RepoFile]:
+def download_repo(url: str = repo_archive_uri) -> List[RepoDir]:
+    """
+    Downloads the repository into memory and returns a list of RepoDirs.
+    """
     response = requests.get(url)
     response.raise_for_status()
 
@@ -125,24 +128,34 @@ def download_repo(url: str = repo_archive_uri) -> List[RepoFile]:
                 path = Path(*file_info.filename.split("/")[1:])
                 files.append(RepoFile(path=path, content=file.read()))
 
-    return sorted(files, key=lambda f: f.path.name)
+    files.sort(key=lambda f: f.path.name)
 
-
-def find_app_dirs(files: List[RepoFile]) -> List[AppDir]:
-    dirs: DefaultDict[Path, List[RepoFile]] = defaultdict(list)
-
-    # Group files by parent directory
+    dirs: DefaultDict[Path, RepoDir] = defaultdict(RepoDir)
     for file in files:
-        dirs[file.path.parent].append(file)
+        repo_dir = dirs[file.path.parent]
+        repo_dir.path = file.path.parent
+        repo_dir.files.append(file)
 
+    return list(dirs.values())
+
+
+def find_app_dirs(dirs: List[RepoDir]) -> List[RepoDir]:
+    """
+    Finds example app dirs.
+
+    An example app dir is a directory containing a README.md file.
+    """
     return sorted(
-        [AppDir(path=path, files=files) for path, files in dirs.items() if has_readme(files)],
+        [RepoDir(path=d.path, files=d.files) for d in dirs if has_readme(d.files)],
         key=lambda d: d.path.as_posix(),
     )
 
 
-def find_app_dirs_by_name(name: str, files: List[RepoFile]) -> Optional[AppDir]:
-    apps = find_app_dirs(files)
+def find_app_dirs_by_name(name: str, dirs: List[RepoDir]) -> Optional[RepoDir]:
+    """
+    Finds an example app dir by name.
+    """
+    apps = find_app_dirs(dirs)
     return next((app for app in apps if app.path.as_posix() == name), None)
 
 

@@ -5,7 +5,7 @@ from pathlib import Path
 from beta9 import config
 from beta9.cli.main import load_cli
 
-from . import configure, login, logs, quickstart
+from . import configure, example, login, logs, quickstart
 
 
 @dataclass
@@ -27,4 +27,5 @@ cli.register(configure)
 cli.register(quickstart)
 cli.register(login)
 cli.register(logs)
+cli.register(example)
 cli.load_version("beam-client")

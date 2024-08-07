@@ -1,6 +1,7 @@
 from beta9 import env
 from beta9.abstractions import experimental
 from beta9.abstractions.container import Container
+from beta9.abstractions.endpoint import ASGI as asgi
 from beta9.abstractions.endpoint import Endpoint as endpoint
 from beta9.abstractions.function import Function as function
 from beta9.abstractions.image import Image
@@ -19,6 +20,7 @@ __all__ = [
     "task_queue",
     "function",
     "endpoint",
+    "asgi",
     "Container",
     "env",
     "PythonVersion",

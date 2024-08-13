@@ -22,7 +22,7 @@ settings = SDKSettings(
 )
 
 
-cli = load_cli(settings=settings)
+cli = load_cli(settings=settings, check_config=False)
 cli.register(configure)
 cli.register(quickstart)
 cli.register(login)

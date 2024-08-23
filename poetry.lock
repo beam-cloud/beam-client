@@ -55,13 +55,13 @@ tests = ["mypy (>=0.800)", "pytest", "pytest-asyncio"]
 
 [[package]]
 name = "beta9"
-version = "0.1.68"
+version = "0.1.71"
 description = ""
 optional = false
 python-versions = "<4.0,>=3.8"
 files = [
-    {file = "beta9-0.1.68-py3-none-any.whl", hash = "sha256:2e95e6f6a3fe3a2142a99e180228856b95244ab3a39ddd2eb0377209411c4d66"},
-    {file = "beta9-0.1.68.tar.gz", hash = "sha256:67040b456ef566a263b32e308a78c527ac3f1ee6bf756e577d40af5c105e17cb"},
+    {file = "beta9-0.1.71-py3-none-any.whl", hash = "sha256:b9722c6109b36a9c0d207d1f5800676171b34c1135d7c5a2f868a2018b24f96a"},
+    {file = "beta9-0.1.71.tar.gz", hash = "sha256:4b23924ef5fb2d3886c0debde6861848780ad4421e7c8f1010a749c414338b2c"},
 ]
 
 [package.dependencies]
@@ -69,7 +69,7 @@ asgiref = ">=3.8.1,<4.0.0"
 betterproto-beta9 = {version = "2.0.0b7", extras = ["compiler"]}
 click = ">=8.1.7,<9.0.0"
 cloudpickle = ">=3.0.0,<4.0.0"
-croniter = ">=2.0.3,<3.0.0"
+croniter = ">=3.0.3,<4.0.0"
 fastapi = ">=0.110.2,<0.111.0"
 grpcio = ">=1.60.0,<2.0.0"
 grpclib = ">=0.4.7,<0.5.0"
@@ -298,13 +298,13 @@ files = [
 
 [[package]]
 name = "croniter"
-version = "2.0.7"
+version = "3.0.3"
 description = "croniter provides iteration for datetime object with cron like format"
 optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,>=2.6"
 files = [
-    {file = "croniter-2.0.7-py2.py3-none-any.whl", hash = "sha256:f15e80828d23920c4bb7f4d9340b932c9dcabecafc7775703c8b36d1253ed526"},
-    {file = "croniter-2.0.7.tar.gz", hash = "sha256:1041b912b4b1e03751a0993531becf77851ae6e8b334c9c76ffeffb8f055f53f"},
+    {file = "croniter-3.0.3-py2.py3-none-any.whl", hash = "sha256:b3bd11f270dc54ccd1f2397b813436015a86d30ffc5a7a9438eec1ed916f2101"},
+    {file = "croniter-3.0.3.tar.gz", hash = "sha256:34117ec1741f10a7bd0ec3ad7d8f0eb8fa457a2feb9be32e6a2250e158957668"},
 ]
 
 [package.dependencies]
@@ -1317,4 +1317,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8"
-content-hash = "1ef4d2f355035ba388747b03c164cd4574de9bf923f1210e767d0de0f2e55f23"
+content-hash = "631819be8df423ee455333eeef701500c30037bd15cb0e5060f23bc4b9d6f3e9"

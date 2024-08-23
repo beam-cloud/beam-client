@@ -4,6 +4,7 @@ from beta9.abstractions.container import Container
 from beta9.abstractions.endpoint import ASGI as asgi
 from beta9.abstractions.endpoint import Endpoint as endpoint
 from beta9.abstractions.function import Function as function
+from beta9.abstractions.function import Schedule as schedule
 from beta9.abstractions.image import Image
 from beta9.abstractions.map import Map
 from beta9.abstractions.output import Output
@@ -28,4 +29,5 @@ __all__ = [
     "Output",
     "QueueDepthAutoscaler",
     "experimental",
+    "schedule",
 ]

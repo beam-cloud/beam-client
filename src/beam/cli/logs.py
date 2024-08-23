@@ -58,9 +58,16 @@ def common(**_):
     "--lines",
     "-n",
     type=click.INT,
-    required=True,
-    default=10,
-    help="Number of lines back to start.",
+    required=False,
+    default=250,
+    help="Display the last N lines.",
+)
+@click.option(
+    "--show-timestamp",
+    type=click.BOOL,
+    is_flag=True,
+    required=False,
+    help="Include the log's timestamp.",
 )
 @click.option(
     "--host",
@@ -83,6 +90,7 @@ def logs(
     deployment_id: Optional[str],
     container_id: Optional[str],
     lines: int,
+    show_timestamp: bool,
     realtime_host: str,
     config_path: str,
 ):
@@ -108,26 +116,30 @@ def logs(
     }.get(object_id, "")
     now = datetime.datetime.now(datetime.timezone.utc)
 
-    logs_before = json.dumps({
-        "token": context.token,
-        "streamType": "LOGS_STREAM",
-        "action": "LOGS_QUERY",
-        "stream": False,
-        "objectType": object_type,
-        "objectId": object_id,
-        "size": lines,
-        "endingTimestamp": now.isoformat(),
-    })
+    logs_before = json.dumps(
+        {
+            "token": context.token,
+            "streamType": "LOGS_STREAM",
+            "action": "LOGS_QUERY",
+            "stream": False,
+            "objectType": object_type,
+            "objectId": object_id,
+            "size": lines,
+            "endingTimestamp": now.isoformat(),
+        }
+    )
 
-    logs_current = json.dumps({
-        "token": context.token,
-        "streamType": "LOGS_STREAM",
-        "action": "LOGS_ADD_STREAM",
-        "stream": True,
-        "objectType": object_type,
-        "objectId": object_id,
-        "startingTimestamp": now.isoformat(),
-    })
+    logs_current = json.dumps(
+        {
+            "token": context.token,
+            "streamType": "LOGS_STREAM",
+            "action": "LOGS_ADD_STREAM",
+            "stream": True,
+            "objectType": object_type,
+            "objectId": object_id,
+            "startingTimestamp": now.isoformat(),
+        }
+    )
 
     with connect(**websocket_params) as w, terminal.progress("Streaming...") as p:
         keep_alive = Thread(target=websocket_keep_alive, args=(w,))
@@ -135,7 +147,7 @@ def logs(
 
         try:
             w.send(logs_before)
-            print_message(w.recv())
+            print_message(w.recv(), show_timestamp)
         except Exception as e:
             p.stop()
             exit_keep_alive_thread()
@@ -144,7 +156,7 @@ def logs(
         try:
             w.send(logs_current)
             while True:
-                print_message(w.recv())
+                print_message(w.recv(), show_timestamp)
         except KeyboardInterrupt:
             p.stop()
             exit_keep_alive_thread()
@@ -155,7 +167,7 @@ def logs(
             terminal.error(str(e))
 
 
-def print_message(msg: Union[str, bytes]) -> None:
+def print_message(msg: Union[str, bytes], show_timestamp: bool = False) -> None:
     data = json.loads(msg)
     if "logs" in data:
         hits = data["logs"]["hits"]["hits"]
@@ -168,7 +180,10 @@ def print_message(msg: Union[str, bytes]) -> None:
 
     hits = sorted(hits, key=lambda k: k["_source"]["@timestamp"])
     for hit in hits:
-        terminal.print(hit["_source"]["msg"], highlight=True, end="")
+        log = hit["_source"]["msg"]
+        if show_timestamp:
+            log = f"[{hit['_source']['@timestamp']}] {log}"
+        terminal.print(log, highlight=True, end="")
 
 
 def websocket_keep_alive(conn: ClientConnection, interval: int = 60):

@@ -48,7 +48,7 @@ def configure(token: str, name: str):
     config_path = settings.config_path
     contexts = load_config(config_path)
 
-    if name in contexts and contexts[name].token:
+    if name in contexts and contexts[name].is_valid():
         text = f"Context '{name}' already exists. Overwrite?"
         if terminal.prompt(text=text, default="n").lower() in ["n", "no"]:
             return

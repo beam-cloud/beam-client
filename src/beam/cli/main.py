@@ -19,6 +19,7 @@ settings = SDKSettings(
     gateway_host=os.getenv("GATEWAY_HOST", "gateway.beam.cloud"),
     gateway_port=int(os.getenv("GATEWAY_PORT", 443)),
     config_path=Path("~/.beam/config.ini").expanduser(),
+    use_defaults_in_prompt=True,
 )
 
 

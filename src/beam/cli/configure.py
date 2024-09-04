@@ -4,6 +4,13 @@ from beta9.cli.extraclick import ClickCommonGroup
 from beta9.config import ConfigContext, get_settings, load_config, save_config
 
 
+def validate_token(ctx: click.Context, param: click.Parameter, value: str):
+    token = value.strip()
+    if not token or len(token) < 64:
+        raise click.BadParameter("A valid token is required", ctx=ctx, param=param)
+    return token
+
+
 @click.group(cls=ClickCommonGroup)
 def common(**_):
     pass
@@ -29,6 +36,7 @@ def common(**_):
     type=click.STRING,
     help="The token.",
     required=True,
+    callback=validate_token,
 )
 @click.argument(
     "name",

@@ -6,7 +6,7 @@ import click
 import requests
 from packaging import version
 
-BASE_API_URL = os.getenv("BASE_API_URL", "https://app.beam.cloud")
+BASE_API_URL = os.getenv("BASE_API_URL", "https://api.beam.cloud")
 
 
 def check_version():

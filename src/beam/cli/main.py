@@ -1,8 +1,10 @@
 import os
 import sys
 from dataclasses import dataclass
+from gettext import gettext as _
 from pathlib import Path
 
+import click
 from beta9 import config
 from beta9.cli.main import load_cli
 
@@ -37,10 +39,19 @@ _cli = cli
 
 
 def cli():
-    try:
-        utils.check_version()
+    utils.check_version()
 
+    try:
         if exit_code := _cli(standalone_mode=False):
             sys.exit(exit_code)
-    except Exception:
-        raise
+    except (EOFError, KeyboardInterrupt) as e:
+        click.echo(file=sys.stderr)
+        raise click.Abort() from e
+    except click.exceptions.ClickException as e:
+        e.show()
+        sys.exit(e.exit_code)
+    except click.exceptions.Exit as e:
+        sys.exit(e.exit_code)
+    except click.exceptions.Abort:
+        click.echo(_("Aborted!"), file=sys.stderr)
+        sys.exit(1)

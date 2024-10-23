@@ -3,6 +3,7 @@ from beta9.abstractions import experimental
 from beta9.abstractions.container import Container
 from beta9.abstractions.endpoint import ASGI as asgi
 from beta9.abstractions.endpoint import Endpoint as endpoint
+from beta9.abstractions.endpoint import RealtimeASGI as realtime
 from beta9.abstractions.function import Function as function
 from beta9.abstractions.function import Schedule as schedule
 from beta9.abstractions.image import Image
@@ -24,6 +25,7 @@ __all__ = [
     "function",
     "endpoint",
     "asgi",
+    "realtime",
     "Container",
     "env",
     "PythonVersion",

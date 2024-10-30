@@ -65,7 +65,7 @@ def configure(token: str, name: str):
 
             new_name = terminal.prompt(text="Enter a new context name")
             if new_name in contexts:
-                terminal.error(f"Context '{new_name}' already exists.", exit=False)
+                terminal.warn("The context you entered already exists.")
                 continue
 
             name = new_name

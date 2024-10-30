@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "beam-client"
-version = "0.2.98"
+version = "0.2.99"
 description = ""
 authors = ["beam.cloud <support@beam.cloud>"]
 packages = [

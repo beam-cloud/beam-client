@@ -54,22 +54,22 @@ def configure(token: str, name: str):
         while True:
             if terminal.prompt(
                 text=f"Context '{name}' already exists. Overwrite? (y/n)", default="n"
-            ).lower() not in ["y", "yes"]:
-                if terminal.prompt(
-                    text="Would you like to provide a different context name? (y/n)", default="n"
-                ).lower() in ["y", "yes"]:
-                    new_name = terminal.prompt(text="Enter a new context name")
-                    if new_name == name:
-                        msg = "New context name cannot be the same as the existing name"
-                        terminal.error(msg, exit=False)
-                    else:
-                        name = new_name
-                        break
-                else:
-                    terminal.warn(f"No changes made to {config_path}")
-                    return
-            else:
+            ).lower() not in ["n", "no"]:
                 break
+
+            if terminal.prompt(
+                text="Would you like to provide a different context name? (y/n)", default="n"
+            ).lower() not in ["y", "yes"]:
+                terminal.warn(f"No changes made to {config_path}")
+                return
+
+            new_name = terminal.prompt(text="Enter a new context name")
+            if new_name in contexts:
+                terminal.error(f"Context '{new_name}' already exists.", exit=False)
+                continue
+
+            name = new_name
+            break
 
     context = ConfigContext(
         token=token, gateway_host=settings.gateway_host, gateway_port=settings.gateway_port

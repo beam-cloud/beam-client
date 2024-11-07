@@ -7,6 +7,7 @@ from beta9.abstractions.endpoint import RealtimeASGI as realtime
 from beta9.abstractions.function import Function as function
 from beta9.abstractions.function import Schedule as schedule
 from beta9.abstractions.image import Image
+from beta9.abstractions.integrations import VLLM, VLLMArgs
 from beta9.abstractions.map import Map
 from beta9.abstractions.output import Output
 from beta9.abstractions.queue import SimpleQueue as Queue
@@ -34,4 +35,6 @@ __all__ = [
     "QueueDepthAutoscaler",
     "experimental",
     "schedule",
+    "VLLM",
+    "VLLMArgs",
 ]

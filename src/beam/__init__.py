@@ -1,4 +1,4 @@
-from beta9 import env, integrations
+from beta9 import env
 from beta9.abstractions import experimental
 from beta9.abstractions.container import Container
 from beta9.abstractions.endpoint import ASGI as asgi

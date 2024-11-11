@@ -1,4 +1,4 @@
-from beta9 import env
+from beta9 import Bot, BotContext, BotEventType, BotLocation, env
 from beta9.abstractions import experimental
 from beta9.abstractions.container import Container
 from beta9.abstractions.endpoint import ASGI as asgi
@@ -35,4 +35,8 @@ __all__ = [
     "experimental",
     "schedule",
     "integrations",
+    "Bot",
+    "BotContext",
+    "BotEventType",
+    "BotLocation",
 ]

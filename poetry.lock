@@ -55,13 +55,13 @@ tests = ["mypy (>=0.800)", "pytest", "pytest-asyncio"]
 
 [[package]]
 name = "beta9"
-version = "0.1.123"
+version = "0.1.124"
 description = ""
 optional = false
 python-versions = "<4.0,>=3.8"
 files = [
-    {file = "beta9-0.1.123-py3-none-any.whl", hash = "sha256:0c0e595bd62f2142aff04c54ff2112db4ae97b54e5214ee53660b0aabd746413"},
-    {file = "beta9-0.1.123.tar.gz", hash = "sha256:91f34726d73921c76ad7dbf3811f6fa04de01c95204758cd0d55ac721c896877"},
+    {file = "beta9-0.1.124-py3-none-any.whl", hash = "sha256:f5c89155ffcdc31e49e4a77453f3d75789a1248273538df5efb68b6e2917bfe7"},
+    {file = "beta9-0.1.124.tar.gz", hash = "sha256:f5cdf50055dc3814d35eace727db09e723fe9819922a2393a148289937378144"},
 ]
 
 [package.dependencies]
@@ -75,6 +75,7 @@ grpcio = ">=1.60.0,<2.0.0"
 grpclib = ">=0.4.7,<0.5.0"
 prompt-toolkit = ">=3.0.48,<4.0.0"
 protobuf = ">=4.25.1,<5.0.0"
+requests = ">=2.32.3,<3.0.0"
 rich = ">=13.7.0,<14.0.0"
 typeguard = ">=2.13.3,<3.0.0"
 typing-extensions = ">=4.7.1,<5.0.0"
@@ -1360,4 +1361,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8"
-content-hash = "fce9736ea68739170a95ba13a8d42a144ecf89689621b95e3383bedd4c1c714b"
+content-hash = "fcfee999f39d9df8e6046188a3b9425c979c20d1432da7014754961cf1201a27"

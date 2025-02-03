@@ -93,13 +93,13 @@ typecheck = ["mypy"]
 
 [[package]]
 name = "beta9"
-version = "0.1.165"
+version = "0.1.168"
 description = ""
 optional = false
 python-versions = "<4.0,>=3.8"
 files = [
-    {file = "beta9-0.1.165-py3-none-any.whl", hash = "sha256:9c3384dbab746fe8779704b41e885c32775f2bdeb897fb8361ccc6558223cad2"},
-    {file = "beta9-0.1.165.tar.gz", hash = "sha256:3c40a97379022ebfa22ba5b20812b72815a921c359833e1bbd881828ccde041d"},
+    {file = "beta9-0.1.168-py3-none-any.whl", hash = "sha256:d58b8b4705c6e61bc0c2e9f6b56a1ec2b1d9c23a1bc70dc958c37aeb03d5798a"},
+    {file = "beta9-0.1.168.tar.gz", hash = "sha256:c005fb9c45f982abe6d70877bfaf1fb1f8c735f167602eae4ea0cc8145e8dc42"},
 ]
 
 [package.dependencies]
@@ -1595,4 +1595,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8"
-content-hash = "1cc8b837b9ac55825f2a72c79200f37d4bdd786bde3f95853336b5da5d7150c7"
+content-hash = "e7a16f42d17df279dc59bb1b6b98db22ae6b62cd0b3f93a03af19106a1c33e9e"

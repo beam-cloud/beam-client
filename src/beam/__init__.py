@@ -9,6 +9,7 @@ from beta9.abstractions.function import Schedule as schedule
 from beta9.abstractions.image import Image
 from beta9.abstractions.map import Map
 from beta9.abstractions.output import Output
+from beta9.abstractions.pod import CreatePodResult, Pod
 from beta9.abstractions.queue import SimpleQueue as Queue
 from beta9.abstractions.taskqueue import TaskQueue as task_queue
 from beta9.abstractions.volume import CloudBucket, CloudBucketConfig, Volume
@@ -39,4 +40,6 @@ __all__ = [
     "BotContext",
     "BotEventType",
     "BotLocation",
+    "Pod",
+    "CreatePodResult",
 ]

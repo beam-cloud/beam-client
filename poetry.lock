@@ -97,23 +97,23 @@ typecheck = ["mypy"]
 
 [[package]]
 name = "beta9"
-version = "0.1.181"
+version = "0.1.186"
 description = ""
 optional = false
 python-versions = "<4.0,>=3.8"
 groups = ["main"]
 files = [
-    {file = "beta9-0.1.181-py3-none-any.whl", hash = "sha256:a3bcebf4b95cbab2a0458791d971f6a61429627679212c7ec03086781bb62a81"},
-    {file = "beta9-0.1.181.tar.gz", hash = "sha256:51b6f02f72f040bd0168f879498df297a3fa05e883a34ee16771ea2f783455a4"},
+    {file = "beta9-0.1.186-py3-none-any.whl", hash = "sha256:88a4ac945634d2af17cfb951273f4bfa4f92de2011a108b2931a181378ae14c7"},
+    {file = "beta9-0.1.186.tar.gz", hash = "sha256:4c542807a80ff8005f40fe0413bdfaddda0bf47ef8a4385808630b1bcd1763d0"},
 ]
 
 [package.dependencies]
 asgiref = ">=3.8.1,<4.0.0"
-betterproto-beta9 = {version = "2.0.0b7", extras = ["compiler"]}
+betterproto-beta9 = {version = "2.0.1", extras = ["compiler"]}
 click = ">=8.1.7,<9.0.0"
 cloudpickle = ">=3.0.0,<4.0.0"
 croniter = ">=3.0.3,<4.0.0"
-fastapi = ">=0.110.2,<0.111.0"
+fastapi = ">=0.115.11,<0.116.0"
 grpcio = "1.69.0"
 grpclib = ">=0.4.7,<0.5.0"
 paramiko = ">=3.5.0,<4.0.0"
@@ -129,14 +129,14 @@ websocket-client = ">=1.8.0,<2.0.0"
 
 [[package]]
 name = "betterproto-beta9"
-version = "2.0.0b7"
+version = "2.0.1"
 description = "A better Protobuf / gRPC generator & library"
 optional = false
 python-versions = "<4.0,>=3.8"
 groups = ["main"]
 files = [
-    {file = "betterproto_beta9-2.0.0b7-py3-none-any.whl", hash = "sha256:2ee8bbbbd650d82a2b94629a8e7a3765dc793a52d5f0b156a838bbfb80aa37b8"},
-    {file = "betterproto_beta9-2.0.0b7.tar.gz", hash = "sha256:122e0f6fbf9591e782848f3d486f1eb90657e215cb8aca74886d4ba6b8fa4b9a"},
+    {file = "betterproto_beta9-2.0.1-py3-none-any.whl", hash = "sha256:8e6fb7b1ef608eb354a7f5456ad4465c089d6bb19df46dcb89d7d8b131cf9b30"},
+    {file = "betterproto_beta9-2.0.1.tar.gz", hash = "sha256:86ff723328a28fcd9081edd362112cd98edc936df0f03006000543e42e431fdc"},
 ]
 
 [package.dependencies]
@@ -515,23 +515,24 @@ test = ["pytest (>=6)"]
 
 [[package]]
 name = "fastapi"
-version = "0.110.3"
+version = "0.115.11"
 description = "FastAPI framework, high performance, easy to learn, fast to code, ready for production"
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
 files = [
-    {file = "fastapi-0.110.3-py3-none-any.whl", hash = "sha256:fd7600612f755e4050beb74001310b5a7e1796d149c2ee363124abdfa0289d32"},
-    {file = "fastapi-0.110.3.tar.gz", hash = "sha256:555700b0159379e94fdbfc6bb66a0f1c43f4cf7060f25239af3d84b63a656626"},
+    {file = "fastapi-0.115.11-py3-none-any.whl", hash = "sha256:32e1541b7b74602e4ef4a0260ecaf3aadf9d4f19590bba3e1bf2ac4666aa2c64"},
+    {file = "fastapi-0.115.11.tar.gz", hash = "sha256:cc81f03f688678b92600a65a5e618b93592c65005db37157147204d8924bf94f"},
 ]
 
 [package.dependencies]
 pydantic = ">=1.7.4,<1.8 || >1.8,<1.8.1 || >1.8.1,<2.0.0 || >2.0.0,<2.0.1 || >2.0.1,<2.1.0 || >2.1.0,<3.0.0"
-starlette = ">=0.37.2,<0.38.0"
+starlette = ">=0.40.0,<0.47.0"
 typing-extensions = ">=4.8.0"
 
 [package.extras]
-all = ["email_validator (>=2.0.0)", "httpx (>=0.23.0)", "itsdangerous (>=1.1.0)", "jinja2 (>=2.11.2)", "orjson (>=3.2.1)", "pydantic-extra-types (>=2.0.0)", "pydantic-settings (>=2.0.0)", "python-multipart (>=0.0.7)", "pyyaml (>=5.3.1)", "ujson (>=4.0.1,!=4.0.2,!=4.1.0,!=4.2.0,!=4.3.0,!=5.0.0,!=5.1.0)", "uvicorn[standard] (>=0.12.0)"]
+all = ["email-validator (>=2.0.0)", "fastapi-cli[standard] (>=0.0.5)", "httpx (>=0.23.0)", "itsdangerous (>=1.1.0)", "jinja2 (>=3.1.5)", "orjson (>=3.2.1)", "pydantic-extra-types (>=2.0.0)", "pydantic-settings (>=2.0.0)", "python-multipart (>=0.0.18)", "pyyaml (>=5.3.1)", "ujson (>=4.0.1,!=4.0.2,!=4.1.0,!=4.2.0,!=4.3.0,!=5.0.0,!=5.1.0)", "uvicorn[standard] (>=0.12.0)"]
+standard = ["email-validator (>=2.0.0)", "fastapi-cli[standard] (>=0.0.5)", "httpx (>=0.23.0)", "jinja2 (>=3.1.5)", "python-multipart (>=0.0.18)", "uvicorn[standard] (>=0.12.0)"]
 
 [[package]]
 name = "grpcio"
@@ -1406,14 +1407,15 @@ files = [
 
 [[package]]
 name = "starlette"
-version = "0.37.2"
+version = "0.44.0"
 description = "The little ASGI library that shines."
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
+markers = "python_version < \"3.13\""
 files = [
-    {file = "starlette-0.37.2-py3-none-any.whl", hash = "sha256:6fe59f29268538e5d0d182f2791a479a0c64638e6935d1c6989e63fb2699c6ee"},
-    {file = "starlette-0.37.2.tar.gz", hash = "sha256:9af890290133b79fc3db55474ade20f6220a364a0402e0b556e7cd5e1e093823"},
+    {file = "starlette-0.44.0-py3-none-any.whl", hash = "sha256:19edeb75844c16dcd4f9dd72f22f9108c1539f3fc9c4c88885654fef64f85aea"},
+    {file = "starlette-0.44.0.tar.gz", hash = "sha256:e35166950a3ccccc701962fe0711db0bc14f2ecd37c6f9fe5e3eae0cbaea8715"},
 ]
 
 [package.dependencies]
@@ -1421,7 +1423,26 @@ anyio = ">=3.4.0,<5"
 typing-extensions = {version = ">=3.10.0", markers = "python_version < \"3.10\""}
 
 [package.extras]
-full = ["httpx (>=0.22.0)", "itsdangerous", "jinja2", "python-multipart (>=0.0.7)", "pyyaml"]
+full = ["httpx (>=0.27.0,<0.29.0)", "itsdangerous", "jinja2", "python-multipart (>=0.0.18)", "pyyaml"]
+
+[[package]]
+name = "starlette"
+version = "0.46.1"
+description = "The little ASGI library that shines."
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+markers = "python_version >= \"3.13\""
+files = [
+    {file = "starlette-0.46.1-py3-none-any.whl", hash = "sha256:77c74ed9d2720138b25875133f3a2dae6d854af2ec37dceb56aef370c1d8a227"},
+    {file = "starlette-0.46.1.tar.gz", hash = "sha256:3c88d58ee4bd1bb807c0d1acb381838afc7752f9ddaec81bbe4383611d833230"},
+]
+
+[package.dependencies]
+anyio = ">=3.6.2,<5"
+
+[package.extras]
+full = ["httpx (>=0.27.0,<0.29.0)", "itsdangerous", "jinja2", "python-multipart (>=0.0.18)", "pyyaml"]
 
 [[package]]
 name = "tomli"
@@ -1661,4 +1682,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.8"
-content-hash = "3aae59bdae051adf2b310386412faf72e01bc8e11f89165d3c7259934c65344e"
+content-hash = "fa410cbbf12ac1b1bb6de710cdc6bf5650d630833dbc6d14d8fa6cb29c37be0a"

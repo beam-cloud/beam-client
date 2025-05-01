@@ -34,7 +34,7 @@ def management(**_):
 
 @common.command(
     name="create-app",
-    help="Downloads an examlpe app.",
+    help="Downloads an example app.",
 )
 @click.argument(
     "name",

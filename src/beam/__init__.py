@@ -1,4 +1,4 @@
-from beta9 import Bot, BotContext, BotEventType, BotLocation, env
+from beta9 import Bot, BotContext, BotEventType, BotLocation, env, schema
 from beta9.abstractions import experimental
 from beta9.abstractions.base.container import Container
 from beta9.abstractions.endpoint import ASGI as asgi
@@ -13,7 +13,11 @@ from beta9.abstractions.pod import Pod, PodInstance
 from beta9.abstractions.queue import SimpleQueue as Queue
 from beta9.abstractions.taskqueue import TaskQueue as task_queue
 from beta9.abstractions.volume import CloudBucket, CloudBucketConfig, Volume
+from beta9.client.deployment import Deployment
+from beta9.client.task import Task
 from beta9.type import GpuType, PythonVersion, QueueDepthAutoscaler
+
+from .client.client import Client
 
 __all__ = [
     "Map",
@@ -42,4 +46,8 @@ __all__ = [
     "BotLocation",
     "Pod",
     "PodInstance",
+    "Client",
+    "Task",
+    "Deployment",
+    "schema",
 ]

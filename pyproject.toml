@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "beam-client"
-version = "0.2.157"
+version = "0.2.158"
 description = ""
 authors = ["beam.cloud <support@beam.cloud>"]
 packages = [
@@ -10,9 +10,9 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.8"
-beta9 = "^0.1.194"
 requests = "^2.31.0"
 websockets = "^13.0"
+beta9 = "^0.1.199"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.1.1"

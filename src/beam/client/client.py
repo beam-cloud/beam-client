@@ -98,5 +98,14 @@ class Client(client.Client):
         deployment = self.get_deployment(identifier)
         return deployment.subscribe(input=input)
 
+    def download_file(self, url: str, local_path: str) -> bytes:
+        """Download a file from a URL."""
+
+        response = requests.get(url)
+        response.raise_for_status()
+
+        with open(local_path, "wb") as f:
+            f.write(response.content)
+
     def __del__(self) -> None:
         self._deployment_cache.clear()

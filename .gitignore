@@ -5,3 +5,5 @@ __pycache__
 .python-version
 .DS_Store
 .vscode/launch.json
+.beta9ignore
+.beamignore

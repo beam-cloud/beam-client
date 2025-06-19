@@ -1,4 +1,25 @@
-from beta9 import Bot, BotContext, BotEventType, BotLocation, env, schema
+from beta9 import (
+    Bot,
+    BotContext,
+    BotEventType,
+    BotLocation,
+    Sandbox,
+    SandboxConnectionError,
+    SandboxFileInfo,
+    SandboxFilePosition,
+    SandboxFileSearchMatch,
+    SandboxFileSearchRange,
+    SandboxFileSystem,
+    SandboxFileSystemError,
+    SandboxInstance,
+    SandboxProcess,
+    SandboxProcessError,
+    SandboxProcessManager,
+    SandboxProcessResponse,
+    SandboxProcessStream,
+    env,
+    schema,
+)
 from beta9.abstractions import experimental
 from beta9.abstractions.base.container import Container
 from beta9.abstractions.endpoint import ASGI as asgi
@@ -50,4 +71,18 @@ __all__ = [
     "Task",
     "Deployment",
     "schema",
+    "Sandbox",
+    "SandboxInstance",
+    "SandboxProcess",
+    "SandboxProcessManager",
+    "SandboxProcessResponse",
+    "SandboxProcessStream",
+    "SandboxProcessError",
+    "SandboxConnectionError",
+    "SandboxFileInfo",
+    "SandboxFileSystem",
+    "SandboxFileSystemError",
+    "SandboxFilePosition",
+    "SandboxFileSearchMatch",
+    "SandboxFileSearchRange",
 ]

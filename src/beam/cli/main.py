@@ -16,6 +16,8 @@ class SDKSettings(config.SDKSettings):
     realtime_host: str = os.getenv("REALTIME_HOST", "wss://rt.beam.cloud")
 
 
+check_config = os.getenv("BEAM_TOKEN") is not None
+
 settings = SDKSettings(
     name="Beam",
     api_host=os.getenv("API_HOST", "app.beam.cloud"),
@@ -23,11 +25,12 @@ settings = SDKSettings(
     gateway_host=os.getenv("GATEWAY_HOST", "gateway.beam.cloud"),
     gateway_port=int(os.getenv("GATEWAY_PORT", 443)),
     config_path=Path("~/.beam/config.ini").expanduser(),
+    api_token=os.getenv("BEAM_TOKEN"),
     use_defaults_in_prompt=True,
 )
 
 
-cli = load_cli(settings=settings, check_config=False)
+cli = load_cli(settings=settings, check_config=check_config)
 cli.register(configure)
 cli.register(quickstart)
 cli.register(login)

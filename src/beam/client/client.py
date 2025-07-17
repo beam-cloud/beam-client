@@ -11,7 +11,7 @@ from . import settings
 
 
 class Client(client.Client):
-    def __init__(self, token: str) -> None:
+    def __init__(self, token: str = "") -> None:
         self._deployment_cache = {}
 
         super().__init__(

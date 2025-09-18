@@ -20,4 +20,5 @@ settings = SDKSettings(
     gateway_port=int(os.getenv("GATEWAY_PORT", 443)),
     config_path=Path("~/.beam/config.ini").expanduser(),
     use_defaults_in_prompt=True,
+    api_token=os.getenv("BEAM_TOKEN"),
 )

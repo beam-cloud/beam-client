@@ -16,7 +16,10 @@ class SDKSettings(config.SDKSettings):
     realtime_host: str = os.getenv("REALTIME_HOST", "wss://rt.beam.cloud")
 
 
-check_config = os.getenv("BEAM_TOKEN") is not None
+# Check if the command is "configure" - skip config check for configure command
+check_config = os.getenv("BEAM_TOKEN") is None and not (
+    len(sys.argv) > 1 and sys.argv[1] == "configure"
+)
 
 settings = SDKSettings(
     name="Beam",

@@ -81,10 +81,18 @@ jobs:
           tar -xzf pyapp.tar.gz
           mv pyapp-v* pyapp-latest
 
+      - name: Build Python wheel
+        run: |
+          python -m pip install --upgrade build
+          python -m build --wheel
+          cp dist/*.whl ../pyapp-latest/beam-client.whl
+        working-directory: python
+
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v0.0.13
         env:
           PYAPP_PROJECT_NAME: "beam-client"
+          PYAPP_PROJECT_PATH: "beam-client.whl"
           PYAPP_EXEC_MODULE: "${{ steps.set-build-info.outputs.app_name }}"
           PYAPP_PROJECT_VERSION: "${{ steps.set-build-info.outputs.app_version }}"
           PYAPP_FULL_ISOLATION: "true"

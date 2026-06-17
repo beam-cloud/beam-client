@@ -190,11 +190,17 @@ func (p *Process) Stream(ctx context.Context, sink func(LogEntry)) (int, error) 
 			return 0, err
 		}
 		if !status.Running {
-			stdout, _ = p.Stdout.Read(ctx)
+			stdout, err = p.Stdout.Read(ctx)
+			if err != nil {
+				return 0, err
+			}
 			if stdout != "" && sink != nil {
 				sink(LogEntry{Stream: "stdout", Data: stdout})
 			}
-			stderr, _ = p.Stderr.Read(ctx)
+			stderr, err = p.Stderr.Read(ctx)
+			if err != nil {
+				return 0, err
+			}
 			if stderr != "" && sink != nil {
 				sink(LogEntry{Stream: "stderr", Data: stderr})
 			}

@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"sort"
 	"testing"
+	"time"
 
 	pb "github.com/beam-cloud/beta9/proto"
 	"google.golang.org/grpc"
@@ -101,9 +102,12 @@ func (s *fakeVolumeService) GetOrCreateVolume(context.Context, *pb.GetOrCreateVo
 
 type fakePodService struct {
 	pb.UnimplementedPodServiceServer
-	createReq *pb.CreatePodRequest
-	execReq   *pb.PodSandboxExecRequest
-	uploadReq *pb.PodSandboxUploadFileRequest
+	createReq       *pb.CreatePodRequest
+	execReq         *pb.PodSandboxExecRequest
+	uploadReq       *pb.PodSandboxUploadFileRequest
+	statusResponses []*pb.PodSandboxStatusResponse
+	stdoutResponses []string
+	stderrResponses []string
 }
 
 func (s *fakePodService) CreatePod(_ context.Context, req *pb.CreatePodRequest) (*pb.CreatePodResponse, error) {
@@ -121,15 +125,30 @@ func (s *fakePodService) SandboxExec(_ context.Context, req *pb.PodSandboxExecRe
 }
 
 func (s *fakePodService) SandboxStatus(context.Context, *pb.PodSandboxStatusRequest) (*pb.PodSandboxStatusResponse, error) {
+	if len(s.statusResponses) > 0 {
+		res := s.statusResponses[0]
+		s.statusResponses = s.statusResponses[1:]
+		return res, nil
+	}
 	return &pb.PodSandboxStatusResponse{Ok: true, Status: "complete", ExitCode: 0}, nil
 }
 
 func (s *fakePodService) SandboxStdout(context.Context, *pb.PodSandboxStdoutRequest) (*pb.PodSandboxStdoutResponse, error) {
-	return &pb.PodSandboxStdoutResponse{Ok: true, Stdout: "stdout"}, nil
+	stdout := "stdout"
+	if len(s.stdoutResponses) > 0 {
+		stdout = s.stdoutResponses[0]
+		s.stdoutResponses = s.stdoutResponses[1:]
+	}
+	return &pb.PodSandboxStdoutResponse{Ok: true, Stdout: stdout}, nil
 }
 
 func (s *fakePodService) SandboxStderr(context.Context, *pb.PodSandboxStderrRequest) (*pb.PodSandboxStderrResponse, error) {
-	return &pb.PodSandboxStderrResponse{Ok: true, Stderr: "stderr"}, nil
+	stderr := "stderr"
+	if len(s.stderrResponses) > 0 {
+		stderr = s.stderrResponses[0]
+		s.stderrResponses = s.stderrResponses[1:]
+	}
+	return &pb.PodSandboxStderrResponse{Ok: true, Stderr: stderr}, nil
 }
 
 func (s *fakePodService) SandboxKill(context.Context, *pb.PodSandboxKillRequest) (*pb.PodSandboxKillResponse, error) {
@@ -287,7 +306,6 @@ func TestCreateSandboxMapsStubRequest(t *testing.T) {
 		Ports:         []int{8080, 9090},
 		Secrets:       []string{"SECRET_NAME"},
 		Env:           map[string]string{"B": "2", "A": "1"},
-		SyncLocalDir:  false,
 		AllowList:     []string{"8.8.8.8/32"},
 		DockerEnabled: true,
 		Volumes: []VolumeMount{
@@ -340,6 +358,28 @@ func TestCreateSandboxMapsStubRequest(t *testing.T) {
 	}
 	if services.image.verifyReq.GetPythonVersion() != "python3.11" {
 		t.Fatalf("bad image verify request: %#v", services.image.verifyReq)
+	}
+}
+
+func TestSandboxWaitReadyRetriesTransientStatusErrors(t *testing.T) {
+	client, services := newFakeClient(t)
+	services.pod.statusResponses = []*pb.PodSandboxStatusResponse{
+		{Ok: false, ErrorMsg: "Failed to get sandbox status"},
+		{Ok: true, Status: "pending"},
+		{Ok: true, Status: "running"},
+	}
+
+	sb, err := client.ConnectSandbox(context.Background(), "container-123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := sb.WaitReady(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(services.pod.statusResponses) != 0 {
+		t.Fatalf("expected all status responses to be consumed, got %d", len(services.pod.statusResponses))
 	}
 }
 
@@ -404,6 +444,50 @@ func TestFileSyncPresignedUpload(t *testing.T) {
 	}
 	if services.gateway.createReq.GetHash() == "" || services.gateway.createReq.GetSize() == 0 {
 		t.Fatalf("bad create object request: %#v", services.gateway.createReq)
+	}
+}
+
+func TestFileSyncUsesPresignedUploadForLocalWorkspaceStorage(t *testing.T) {
+	client, services := newFakeClient(t)
+	client.mu.Lock()
+	client.config.GatewayHost = "0.0.0.0"
+	client.mu.Unlock()
+
+	services.gateway.headExists = false
+	services.gateway.workspaceStorage = true
+	var uploaded bool
+	uploadServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Fatalf("unexpected upload method: %s", r.Method)
+		}
+		if r.Header.Get("x-beam-test") != "true" {
+			t.Fatalf("missing upload header")
+		}
+		uploaded = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer uploadServer.Close()
+	services.gateway.presigned = uploadServer.URL
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("alpha"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	result, err := NewFileSyncer(dir, WithoutDefaultIgnoreFile()).Sync(context.Background(), client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !uploaded {
+		t.Fatal("expected presigned upload")
+	}
+	if services.gateway.streamed {
+		t.Fatal("unexpected object stream upload")
+	}
+	if result.ObjectID != "object-created" || result.Cached {
+		t.Fatalf("bad sync result: %#v", result)
+	}
+	if services.gateway.createReq == nil {
+		t.Fatal("expected create object request")
 	}
 }
 
@@ -488,5 +572,47 @@ func TestProcessAndFilesystemRPCs(t *testing.T) {
 	}
 	if len(results) != 1 || results[0].Matches[0].Content != "needle" {
 		t.Fatalf("bad find results: %#v", results)
+	}
+}
+
+func TestProcessStreamReadsStdoutAndStderrDeltasThroughExit(t *testing.T) {
+	client, services := newFakeClient(t)
+	services.pod.statusResponses = []*pb.PodSandboxStatusResponse{
+		{Ok: true, Status: "running", ExitCode: -1},
+		{Ok: true, Status: "running", ExitCode: -1},
+		{Ok: true, Status: "exited", ExitCode: 7},
+	}
+	services.pod.stdoutResponses = []string{"out-a\n", "", "out-b\n", ""}
+	services.pod.stderrResponses = []string{"err-a\n", "", "err-b\n", ""}
+
+	sb, err := client.ConnectSandbox(context.Background(), "container-123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	proc, err := sb.Exec(context.Background(), []string{"sh", "-lc", "emit logs"}, ExecOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var entries []LogEntry
+	exitCode, err := proc.Stream(context.Background(), func(entry LogEntry) {
+		entries = append(entries, entry)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exitCode != 7 {
+		t.Fatalf("unexpected exit code: %d", exitCode)
+	}
+	want := []LogEntry{
+		{Stream: "stdout", Data: "out-a\n"},
+		{Stream: "stderr", Data: "err-a\n"},
+		{Stream: "stdout", Data: "out-b\n"},
+		{Stream: "stderr", Data: "err-b\n"},
+	}
+	if !reflect.DeepEqual(entries, want) {
+		t.Fatalf("unexpected stream entries:\n got %#v\nwant %#v", entries, want)
+	}
+	if len(services.pod.stdoutResponses) != 0 || len(services.pod.stderrResponses) != 0 {
+		t.Fatalf("expected final stream drains to be consumed, stdout=%q stderr=%q", services.pod.stdoutResponses, services.pod.stderrResponses)
 	}
 }

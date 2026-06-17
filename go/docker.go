@@ -2,7 +2,6 @@ package beam
 
 import (
 	"context"
-	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -18,15 +17,19 @@ type Docker struct {
 }
 
 type DockerRunOptions struct {
-	Detach  bool
-	Remove  bool
-	Name    string
-	Ports   map[string]string
-	Env     map[string]string
-	Volumes map[string]string
-	Network string
-	Command []string
-	Workdir string
+	Detach     bool
+	Remove     bool
+	Privileged bool
+	Name       string
+	Ports      map[string]string
+	Env        map[string]string
+	Volumes    map[string]string
+	Network    string
+	PID        string
+	IPC        string
+	CgroupNS   string
+	Command    []string
+	Workdir    string
 }
 
 type DockerBuildOptions struct {
@@ -52,6 +55,9 @@ func (d *Docker) Run(ctx context.Context, image string, opts DockerRunOptions) (
 	if opts.Remove {
 		args = append(args, "--rm")
 	}
+	if opts.Privileged {
+		args = append(args, "--privileged")
+	}
 	if opts.Name != "" {
 		args = append(args, "--name", opts.Name)
 	}
@@ -59,6 +65,19 @@ func (d *Docker) Run(ctx context.Context, image string, opts DockerRunOptions) (
 		args = append(args, "--network", opts.Network)
 	} else {
 		args = append(args, "--network", "host")
+	}
+	pidMode := opts.PID
+	if pidMode == "" {
+		pidMode = "host"
+	}
+	if pidMode != "" {
+		args = append(args, "--pid", pidMode)
+	}
+	if opts.IPC != "" {
+		args = append(args, "--ipc", opts.IPC)
+	}
+	if opts.CgroupNS != "" {
+		args = append(args, "--cgroupns", opts.CgroupNS)
 	}
 	for _, host := range sortedMapKeys(opts.Ports) {
 		args = append(args, "-p", host+":"+opts.Ports[host])
@@ -163,14 +182,6 @@ func (d *Docker) ComposeLogs(ctx context.Context, file string, follow bool, work
 	return d.exec(ctx, args, ExecOptions{Workdir: workdir})
 }
 
-func DockerCommand(args ...string) string {
-	parts := make([]string, 0, len(args))
-	for _, arg := range args {
-		parts = append(parts, shellQuote(arg))
-	}
-	return strings.Join(parts, " ")
-}
-
 func (d *Docker) Raw(ctx context.Context, args ...string) (*Process, error) {
 	if len(args) == 0 {
 		return nil, sdkError(ErrValidation, "docker", "docker arguments are required", nil)
@@ -238,10 +249,6 @@ func (d *Docker) exec(ctx context.Context, args []string, opts ExecOptions) (*Pr
 		return nil, err
 	}
 	return d.sandbox.Exec(ctx, args, opts)
-}
-
-func exposeDockerPort(containerPort int) string {
-	return fmt.Sprintf("%d:%d", containerPort, containerPort)
 }
 
 func sortedMapKeys(values map[string]string) []string {

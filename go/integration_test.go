@@ -55,7 +55,7 @@ func useLocalIntegrationGateway() bool {
 func localIntegrationOptions(t *testing.T) []Option {
 	t.Helper()
 
-	configPath := firstEnv("BETA9_CONFIG_PATH", "CONFIG_PATH")
+	configPath := firstEnv("BETA9_CONFIG_PATH", "BEAM_CONFIG_PATH", "CONFIG_PATH")
 	if configPath == "" {
 		configPath = filepath.Join(homeDir(), ".beta9", "config.ini")
 	}
@@ -69,15 +69,12 @@ func localIntegrationOptions(t *testing.T) []Option {
 		t.Fatalf("read local beta9 config: %v", err)
 	}
 
-	token := firstEnv("BETA9_TOKEN")
+	token := firstEnv("BEAM_TOKEN", "BETA9_TOKEN")
 	if token == "" {
 		token = fileCtx.token
 	}
-	if token == "" {
-		token = os.Getenv("BEAM_TOKEN")
-	}
 
-	host := firstEnv("BETA9_GATEWAY_HOST", "GATEWAY_HOST")
+	host := firstEnv("BEAM_GATEWAY_HOST", "BETA9_GATEWAY_HOST", "GATEWAY_HOST")
 	if host == "" {
 		host = fileCtx.gatewayHost
 	}
@@ -85,9 +82,12 @@ func localIntegrationOptions(t *testing.T) []Option {
 		host = "0.0.0.0"
 	}
 	host = strings.TrimSpace(host)
+	if host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
 
 	port := 0
-	if portText := firstEnv("BETA9_GATEWAY_PORT", "GATEWAY_PORT"); portText != "" {
+	if portText := firstEnv("BEAM_GATEWAY_PORT", "BETA9_GATEWAY_PORT", "GATEWAY_PORT"); portText != "" {
 		parsed, err := strconv.Atoi(portText)
 		if err != nil {
 			t.Fatalf("invalid local gateway port %q: %v", portText, err)
@@ -189,13 +189,12 @@ func TestIntegrationExistingImageSandboxSmoke(t *testing.T) {
 	defer client.Close()
 
 	sb, err := client.CreateSandbox(ctx, integrationSandboxConfig(SandboxConfig{
-		Name:         "go-sdk-existing-image-smoke",
-		App:          "go-sdk-existing-image-smoke",
-		Image:        ImageFromID(imageID),
-		CPU:          1,
-		MemoryMiB:    256,
-		SyncLocalDir: false,
-		KeepWarm:     5 * time.Minute,
+		Name:      "go-sdk-existing-image-smoke",
+		App:       "go-sdk-existing-image-smoke",
+		Image:     ImageFromID(imageID),
+		CPU:       1,
+		MemoryMiB: 256,
+		KeepWarm:  5 * time.Minute,
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -221,7 +220,8 @@ func TestIntegrationFileSyncOnly(t *testing.T) {
 	defer client.Close()
 
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "hello.txt"), []byte("hello local sync"), 0o644); err != nil {
+	payload := fmt.Sprintf("hello local sync %d", time.Now().UnixNano())
+	if err := os.WriteFile(filepath.Join(dir, "hello.txt"), []byte(payload), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	result, err := NewFileSyncer(dir, WithoutDefaultIgnoreFile()).Sync(ctx, client)
@@ -232,6 +232,68 @@ func TestIntegrationFileSyncOnly(t *testing.T) {
 		t.Fatalf("bad sync result: %#v", result)
 	}
 	t.Logf("synced local object %s size=%d cached=%t", result.ObjectID, result.Size, result.Cached)
+}
+
+func TestIntegrationCreateSandboxWithSyncLocalDir(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	client := newIntegrationClient(t, ctx)
+	defer client.Close()
+
+	baseImageID := integrationBaseImageID(ctx, t, client)
+
+	dir := t.TempDir()
+	payload := fmt.Sprintf("synced local dir %d\n", time.Now().UnixNano())
+	if err := os.MkdirAll(filepath.Join(dir, "nested"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "nested", "input.txt"), []byte(payload), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".beamignore"), []byte("ignored.txt\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "ignored.txt"), []byte("should not sync\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	sb, err := client.CreateSandbox(ctx, integrationSandboxConfig(SandboxConfig{
+		Name:         "go-sdk-sync-local-dir",
+		App:          "go-sdk-sync-local-dir",
+		Image:        ImageFromID(baseImageID),
+		CPU:          1,
+		MemoryMiB:    256,
+		Workdir:      dir,
+		SyncLocalDir: true,
+		KeepWarm:     5 * time.Minute,
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sb.Terminate(context.Background())
+
+	if err := sb.WaitReady(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := sb.RunCode(ctx, fmt.Sprintf(`
+from pathlib import Path
+expected = %q
+p = Path("nested/input.txt")
+assert p.read_text() == expected
+assert not Path("ignored.txt").exists()
+print(p.read_text().strip())
+`, payload), ExecOptions{Workdir: "/mnt/code"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ExitCode != 0 {
+		t.Fatalf("sync local dir check failed: stdout=%q stderr=%q", result.Stdout, result.Stderr)
+	}
+	if !strings.Contains(result.Stdout, strings.TrimSpace(payload)) {
+		t.Fatalf("unexpected sync local dir output: %#v", result)
+	}
 }
 
 func TestIntegrationSandboxLifecycle(t *testing.T) {
@@ -257,7 +319,6 @@ func TestIntegrationSandboxLifecycle(t *testing.T) {
 				Image:         ImageFromID(baseImageID),
 				CPU:           1,
 				MemoryMiB:     256,
-				SyncLocalDir:  false,
 				Ports:         []int{8080},
 				KeepWarm:      10 * time.Minute,
 				DockerEnabled: false,
@@ -348,7 +409,6 @@ func TestIntegrationSandboxLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer server.Kill(context.Background())
-	time.Sleep(2 * time.Second)
 	url, err := sb.ExposePort(ctx, 8080)
 	if err != nil {
 		t.Fatal(err)
@@ -360,15 +420,7 @@ func TestIntegrationSandboxLifecycle(t *testing.T) {
 	if urls[8080] == "" {
 		t.Fatalf("expected listed URL for 8080, got %#v", urls)
 	}
-	resp, err := httpGetSandboxURL(ctx, client, url+"/file.txt")
-	if err != nil {
-		t.Fatal(err)
-	}
-	body, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
-	if resp.StatusCode != 200 || !strings.Contains(string(body), "hello sandbox") {
-		t.Fatalf("unexpected HTTP response %d %q", resp.StatusCode, string(body))
-	}
+	waitSandboxURLContains(ctx, t, client, url+"/file.txt", "hello sandbox")
 
 	if err := sb.UpdateTTL(ctx, 20*time.Minute); err != nil {
 		t.Fatal(err)
@@ -395,10 +447,9 @@ func TestIntegrationSandboxLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	fromImage, err := client.CreateSandbox(ctx, integrationSandboxConfig(SandboxConfig{
-		Name:         "go-sdk-from-fs-image",
-		App:          "go-sdk-local-integration",
-		Image:        ImageFromID(imageID),
-		SyncLocalDir: false,
+		Name:  "go-sdk-from-fs-image",
+		App:   "go-sdk-local-integration",
+		Image: ImageFromID(imageID),
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -455,6 +506,63 @@ func httpGetSandboxURL(ctx context.Context, client *Client, url string) (*http.R
 	return http.DefaultClient.Do(req)
 }
 
+func readSandboxURLBody(ctx context.Context, client *Client, url string) (int, string, error) {
+	requestCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	resp, err := httpGetSandboxURL(requestCtx, client, url)
+	if err != nil {
+		return 0, "", err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return resp.StatusCode, "", err
+	}
+	return resp.StatusCode, string(body), nil
+}
+
+func waitSandboxURLContains(ctx context.Context, t *testing.T, client *Client, url string, values ...string) string {
+	t.Helper()
+
+	deadline := time.NewTimer(90 * time.Second)
+	defer deadline.Stop()
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	var lastStatus int
+	var lastBody string
+	var lastErr error
+	for {
+		status, body, err := readSandboxURLBody(ctx, client, url)
+		if err == nil {
+			lastStatus = status
+			lastBody = body
+			if status == http.StatusOK {
+				matched := true
+				for _, value := range values {
+					if !strings.Contains(body, value) {
+						matched = false
+						break
+					}
+				}
+				if matched {
+					return body
+				}
+			}
+		} else {
+			lastErr = err
+		}
+
+		select {
+		case <-ctx.Done():
+			t.Fatalf("waiting for %s: status=%d body=%q err=%v ctx=%v", url, lastStatus, lastBody, lastErr, ctx.Err())
+		case <-deadline.C:
+			t.Fatalf("timed out waiting for %s to contain %q: status=%d body=%q err=%v", url, values, lastStatus, lastBody, lastErr)
+		case <-ticker.C:
+		}
+	}
+}
+
 func TestIntegrationImageBuildsAndAppNames(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
@@ -504,14 +612,13 @@ func TestIntegrationImageBuildsAndAppNames(t *testing.T) {
 				t.Fatal("image build returned empty image ID")
 			}
 			sb, err := client.CreateSandbox(ctx, integrationSandboxConfig(SandboxConfig{
-				Name:         "go-sdk-image-" + tc.name,
-				App:          "go-sdk-image-builds",
-				Image:        ImageFromID(result.ImageID),
-				CPU:          1,
-				MemoryMiB:    256,
-				SyncLocalDir: false,
-				KeepWarm:     10 * time.Minute,
-				Env:          map[string]string{"GO_SDK_IMAGE_CASE": tc.name},
+				Name:      "go-sdk-image-" + tc.name,
+				App:       "go-sdk-image-builds",
+				Image:     ImageFromID(result.ImageID),
+				CPU:       1,
+				MemoryMiB: 256,
+				KeepWarm:  10 * time.Minute,
+				Env:       map[string]string{"GO_SDK_IMAGE_CASE": tc.name},
 			}))
 			if err != nil {
 				t.Fatal(err)
@@ -535,23 +642,108 @@ func TestIntegrationImageBuildsAndAppNames(t *testing.T) {
 	}
 }
 
-func TestIntegrationDockerSmoke(t *testing.T) {
-	if os.Getenv("BEAM_TEST_DOCKER") != "1" {
-		t.Skip("BEAM_TEST_DOCKER=1 is required")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+func TestIntegrationVolumeMountPersistsAcrossSandboxes(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
 
 	client := newIntegrationClient(t, ctx)
 	defer client.Close()
 
+	baseImageID := integrationBaseImageID(ctx, t, client)
+	runtimeName := integrationRuntimeName()
+	volumeName := fmt.Sprintf("go-sdk-volume-%s-%d", runtimeName, time.Now().UnixNano())
+	mountPath := "/mnt/beam-go-volume"
+	payload := "volume-ok-" + runtimeName
+
+	first, err := client.CreateSandbox(ctx, integrationSandboxConfig(SandboxConfig{
+		Name:      "go-sdk-volume-writer-" + runtimeName,
+		App:       "go-sdk-volume-" + runtimeName,
+		Image:     ImageFromID(baseImageID),
+		CPU:       1,
+		MemoryMiB: 256,
+		KeepWarm:  10 * time.Minute,
+		Volumes:   []VolumeMount{NewVolume(volumeName, mountPath)},
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstTerminated := false
+	defer func() {
+		if !firstTerminated {
+			_ = first.Terminate(context.Background())
+		}
+	}()
+	if err := first.WaitReady(ctx); err != nil {
+		t.Fatal(err)
+	}
+	writeProc, err := first.Exec(ctx, []string{"sh", "-lc", "mkdir -p /mnt/beam-go-volume/nested && printf " + shellQuote(payload) + " > /mnt/beam-go-volume/nested/value.txt && cat /mnt/beam-go-volume/nested/value.txt"}, ExecOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireProcessContains(ctx, t, writeProc, payload)
+	if err := first.Terminate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	firstTerminated = true
+
+	second, err := client.CreateSandbox(ctx, integrationSandboxConfig(SandboxConfig{
+		Name:      "go-sdk-volume-reader-" + runtimeName,
+		App:       "go-sdk-volume-" + runtimeName,
+		Image:     ImageFromID(baseImageID),
+		CPU:       1,
+		MemoryMiB: 256,
+		KeepWarm:  10 * time.Minute,
+		Volumes:   []VolumeMount{NewVolume(volumeName, mountPath)},
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.Terminate(context.Background())
+	if err := second.WaitReady(ctx); err != nil {
+		t.Fatal(err)
+	}
+	readProc, err := second.Exec(ctx, []string{"sh", "-lc", "test -d /mnt/beam-go-volume && cat /mnt/beam-go-volume/nested/value.txt"}, ExecOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireProcessContains(ctx, t, readProc, payload)
+}
+
+func TestIntegrationDockerWorkspaceAndVolumeVisibility(t *testing.T) {
+	if os.Getenv("BEAM_TEST_DOCKER") != "1" {
+		t.Skip("BEAM_TEST_DOCKER=1 is required")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	defer cancel()
+
+	client := newIntegrationClient(t, ctx)
+	defer client.Close()
+
+	runtimeName := integrationRuntimeName()
+	suffix := fmt.Sprintf("%s-%d", runtimeName, time.Now().UnixNano())
+	volumeName := "go-sdk-docker-visible-" + suffix
+	mountPath := "/mnt/beam-visible"
+	const visiblePort = 8776
+
+	dir := t.TempDir()
+	workspacePayload := "workspace-visible-" + suffix
+	if err := os.MkdirAll(filepath.Join(dir, "app"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "app", "payload.txt"), []byte(workspacePayload), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
 	sb, err := client.CreateSandbox(ctx, integrationSandboxConfig(SandboxConfig{
-		Name:          "go-sdk-docker",
-		App:           "go-sdk-docker",
+		Name:          "go-sdk-docker-visible-" + runtimeName,
+		App:           "go-sdk-docker-visible-" + runtimeName,
 		Image:         NewImage(WithPythonVersion("python3.11")).WithDocker(),
-		CPU:           2,
-		MemoryMiB:     2048,
-		SyncLocalDir:  false,
+		CPU:           1,
+		MemoryMiB:     1024,
+		Ports:         []int{visiblePort},
+		Workdir:       dir,
+		SyncLocalDir:  true,
+		Volumes:       []VolumeMount{NewVolume(volumeName, mountPath)},
 		KeepWarm:      10 * time.Minute,
 		DockerEnabled: true,
 	}))
@@ -563,28 +755,301 @@ func TestIntegrationDockerSmoke(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	volumePayload := "volume-visible-" + suffix
+	if err := sb.FS.Upload(ctx, mountPath+"/payload.txt", []byte(volumePayload), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	serverScript := fmt.Sprintf(`
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from pathlib import Path
+
+workspace_payload = Path("/mnt/code/app/payload.txt").read_text()
+volume_payload = Path(%q).read_text()
+
+class Handler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.0"
+
+    def do_GET(self):
+        body = f"workspace={workspace_payload} volume={volume_payload}\n"
+        data = body.encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Connection", "close")
+        self.end_headers()
+        self.wfile.write(data)
+        self.close_connection = True
+
+    def log_message(self, format, *args):
+        pass
+
+HTTPServer.allow_reuse_address = True
+HTTPServer(("0.0.0.0", %d), Handler).serve_forever()
+`, mountPath+"/payload.txt", visiblePort)
+	server, err := sb.Exec(ctx, []string{"python3", "-c", serverScript}, ExecOptions{Workdir: "/workspace"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Kill(context.Background())
+
+	url, err := sb.ExposePort(ctx, visiblePort)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitSandboxURLContains(ctx, t, client, url, workspacePayload, volumePayload)
+}
+
+func TestIntegrationDockerSmoke(t *testing.T) {
+	if os.Getenv("BEAM_TEST_DOCKER") != "1" {
+		t.Skip("BEAM_TEST_DOCKER=1 is required")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Minute)
+	defer cancel()
+
+	client := newIntegrationClient(t, ctx)
+	defer client.Close()
+
+	runtimeName := integrationRuntimeName()
+	suffix := fmt.Sprintf("%s-%d", runtimeName, time.Now().UnixNano())
+	logContainer := "beam-go-docker-log-" + suffix
+	composeContainer := "beam-go-docker-compose-" + suffix
+	imageTag := "beam-go-docker-built:" + suffix
+	buildDir := "/workspace/docker-build-" + suffix
+	composeDir := "/workspace/docker-compose-" + suffix
+
+	sb, err := client.CreateSandbox(ctx, integrationSandboxConfig(SandboxConfig{
+		Name:          "go-sdk-docker-" + runtimeName,
+		App:           "go-sdk-docker-" + runtimeName,
+		Image:         NewImage(WithPythonVersion("python3.11")).WithDocker(),
+		CPU:           2,
+		MemoryMiB:     2048,
+		KeepWarm:      10 * time.Minute,
+		DockerEnabled: true,
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sb.Terminate(context.Background())
+	if err := sb.WaitReady(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := sb.Docker.WaitReady(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer cleanupDockerContainer(context.Background(), sb, logContainer)
+
 	version, err := sb.Docker.Raw(ctx, "version", "--format", "{{.Server.Version}}")
 	if err != nil {
 		t.Fatal(err)
 	}
-	versionResult, err := version.Output(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if versionResult.ExitCode != 0 || strings.TrimSpace(versionResult.Stdout) == "" {
-		t.Fatalf("docker version failed: %#v", versionResult)
+	versionResult := requireProcessSuccess(ctx, t, version)
+	if strings.TrimSpace(versionResult.Stdout) == "" {
+		t.Fatalf("docker version returned empty output: %#v", versionResult)
 	}
 
-	dockerProc, err := sb.Docker.Run(ctx, "hello-world", DockerRunOptions{Remove: true})
+	composeVersion, err := sb.Docker.Compose(ctx, "version")
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := dockerProc.Output(ctx)
+	requireProcessContains(ctx, t, composeVersion, "Docker Compose")
+
+	pull, err := sb.Docker.Pull(ctx, "busybox:1.36")
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireProcessSuccess(ctx, t, pull)
+
+	if err := sb.FS.Mkdir(ctx, "/workspace/docker-volume", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := sb.FS.Upload(ctx, "/workspace/docker-volume/input.txt", []byte("volume-option-ok"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runWithOptions, err := sb.Docker.Run(ctx, "busybox:1.36", DockerRunOptions{
+		Remove: true,
+		Env:    map[string]string{"BEAM_DOCKER_ENV": "env-option-ok"},
+		Volumes: map[string]string{
+			"/workspace/docker-volume": "/mounted:ro",
+		},
+		Command: []string{"sh", "-c", "cat /mounted/input.txt && echo $BEAM_DOCKER_ENV"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireProcessContains(ctx, t, runWithOptions, "volume-option-ok", "env-option-ok")
+
+	logRun, err := sb.Docker.Run(ctx, "busybox:1.36", DockerRunOptions{
+		Detach:  true,
+		Name:    logContainer,
+		Command: []string{"sh", "-c", "echo log-helper-ok; while true; do sleep 1; done"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireProcessSuccess(ctx, t, logRun)
+
+	ps, err := sb.Docker.Ps(ctx, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireProcessContains(ctx, t, ps, logContainer)
+
+	logs := requireProcessContainsEventually(ctx, t, func() (*Process, error) {
+		return sb.Docker.Logs(ctx, logContainer, false)
+	}, "log-helper-ok")
+	t.Logf("docker logs output: %s", strings.TrimSpace(logs.Stdout+logs.Stderr))
+
+	exec, err := sb.Docker.Exec(ctx, logContainer, "sh", "-c", "echo exec-helper-ok > /tmp/exec.txt && cat /tmp/exec.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireProcessContains(ctx, t, exec, "exec-helper-ok")
+
+	if err := sb.FS.Mkdir(ctx, buildDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dockerfile := "FROM busybox:1.36\nCMD [\"sh\", \"-c\", \"echo build-helper-ok\"]\n"
+	if err := sb.FS.Upload(ctx, buildDir+"/Dockerfile", []byte(dockerfile), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	build, err := sb.Docker.Build(ctx, ".", DockerBuildOptions{Tag: imageTag, Workdir: buildDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireProcessSuccess(ctx, t, build)
+
+	builtRun, err := sb.Docker.Run(ctx, imageTag, DockerRunOptions{Remove: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireProcessContains(ctx, t, builtRun, "build-helper-ok")
+
+	if err := sb.FS.Mkdir(ctx, composeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	composeFile := fmt.Sprintf(`services:
+  app:
+    image: busybox:1.36
+    container_name: %s
+    network_mode: host
+    command: sh -c "echo compose-helper-ok; while true; do sleep 1; done"
+`, composeContainer)
+	if err := sb.FS.Upload(ctx, composeDir+"/compose.yml", []byte(composeFile), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	composeUp, err := sb.Docker.ComposeUp(ctx, DockerComposeOptions{File: "compose.yml", Detach: true, Workdir: composeDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireProcessSuccess(ctx, t, composeUp)
+	defer cleanupDockerCompose(context.Background(), sb, composeDir)
+
+	composeLogs := requireProcessContainsEventually(ctx, t, func() (*Process, error) {
+		return sb.Docker.ComposeLogs(ctx, "compose.yml", false, composeDir)
+	}, "compose-helper-ok")
+	t.Logf("docker compose logs output: %s", strings.TrimSpace(composeLogs.Stdout+composeLogs.Stderr))
+
+	composePs, err := sb.Docker.Compose(ctx, "-f", composeDir+"/compose.yml", "ps", "--all")
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireProcessContains(ctx, t, composePs, composeContainer)
+
+	composeDown, err := sb.Docker.ComposeDown(ctx, "compose.yml", true, composeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireProcessSuccess(ctx, t, composeDown)
+}
+
+func integrationRuntimeName() string {
+	if runtime := os.Getenv("BEAM_TEST_RUNTIME_NAME"); runtime != "" {
+		return strings.ToLower(strings.ReplaceAll(runtime, "_", "-"))
+	}
+	if pool := os.Getenv("BEAM_TEST_POOL"); pool != "" {
+		return strings.ToLower(strings.ReplaceAll(pool, "_", "-"))
+	}
+	return "runc"
+}
+
+func requireProcessSuccess(ctx context.Context, t *testing.T, proc *Process) *ProcessResult {
+	t.Helper()
+	result, err := proc.Output(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if result.ExitCode != 0 {
-		t.Fatalf("docker smoke failed: %#v", result)
+		t.Fatalf("process failed exit=%d stdout=%q stderr=%q", result.ExitCode, result.Stdout, result.Stderr)
+	}
+	return result
+}
+
+func requireProcessContains(ctx context.Context, t *testing.T, proc *Process, values ...string) *ProcessResult {
+	t.Helper()
+	result := requireProcessSuccess(ctx, t, proc)
+	combined := result.Stdout + result.Stderr
+	for _, value := range values {
+		if !strings.Contains(combined, value) {
+			t.Fatalf("process output missing %q: stdout=%q stderr=%q", value, result.Stdout, result.Stderr)
+		}
+	}
+	return result
+}
+
+func requireProcessContainsEventually(ctx context.Context, t *testing.T, start func() (*Process, error), value string) *ProcessResult {
+	t.Helper()
+	deadline := time.Now().Add(15 * time.Second)
+	var lastResult *ProcessResult
+	var lastErr error
+	for {
+		proc, err := start()
+		if err == nil {
+			result, outputErr := proc.Output(ctx)
+			if outputErr == nil && result.ExitCode == 0 {
+				lastResult = result
+				if strings.Contains(result.Stdout+result.Stderr, value) {
+					return result
+				}
+			} else if outputErr != nil {
+				lastErr = outputErr
+			} else {
+				lastResult = result
+			}
+		} else {
+			lastErr = err
+		}
+
+		if time.Now().After(deadline) {
+			if lastResult != nil {
+				t.Fatalf("process output never contained %q: stdout=%q stderr=%q", value, lastResult.Stdout, lastResult.Stderr)
+			}
+			t.Fatalf("process did not produce %q: %v", value, lastErr)
+		}
+
+		select {
+		case <-ctx.Done():
+			t.Fatalf("waiting for process output %q: %v", value, ctx.Err())
+		case <-time.After(500 * time.Millisecond):
+		}
+	}
+}
+
+func cleanupDockerContainer(ctx context.Context, sandbox *Sandbox, name string) {
+	cleanupCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	proc, err := sandbox.Docker.Raw(cleanupCtx, "rm", "-f", name)
+	if err == nil {
+		_, _ = proc.Output(cleanupCtx)
+	}
+}
+
+func cleanupDockerCompose(ctx context.Context, sandbox *Sandbox, workdir string) {
+	cleanupCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	proc, err := sandbox.Docker.ComposeDown(cleanupCtx, "compose.yml", true, workdir)
+	if err == nil {
+		_, _ = proc.Output(cleanupCtx)
 	}
 }
 
@@ -596,24 +1061,99 @@ func TestIntegrationSandboxMemorySnapshot(t *testing.T) {
 	defer client.Close()
 
 	baseImageID := integrationBaseImageID(ctx, t, client)
+	const snapshotPort = 8765
+	token := fmt.Sprintf("snapshot-%d", time.Now().UnixNano())
 	sb, err := client.CreateSandbox(ctx, integrationSandboxConfig(SandboxConfig{
-		Name:         "go-sdk-snapshot",
-		App:          "go-sdk-snapshot",
-		Image:        ImageFromID(baseImageID),
-		CPU:          1,
-		MemoryMiB:    256,
-		SyncLocalDir: false,
-		KeepWarm:     10 * time.Minute,
+		Name:      "go-sdk-snapshot",
+		App:       "go-sdk-snapshot",
+		Image:     ImageFromID(baseImageID),
+		CPU:       1,
+		MemoryMiB: 512,
+		Ports:     []int{snapshotPort},
+		KeepWarm:  10 * time.Minute,
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer sb.Terminate(context.Background())
+	originalTerminated := false
+	defer func() {
+		if !originalTerminated {
+			_ = sb.Terminate(context.Background())
+		}
+	}()
 	if err := sb.WaitReady(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if err := sb.FS.Upload(ctx, "/workspace/checkpoint.txt", []byte("checkpoint-data"), 0o644); err != nil {
+
+	serverScript := fmt.Sprintf(`
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from urllib.parse import urlparse, parse_qs
+import os
+
+token = %q
+state = {"count": 0}
+
+class Handler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.0"
+
+    def do_GET(self):
+        parsed = urlparse(self.path)
+        if parsed.path == "/health":
+            body = f"token={token} ok pid={os.getpid()}\n"
+        elif parsed.path == "/inc":
+            values = parse_qs(parsed.query).get("by", ["1"])
+            state["count"] += int(values[0])
+            body = f"token={token} count={state['count']} pid={os.getpid()}\n"
+        elif parsed.path == "/state":
+            body = f"token={token} count={state['count']} pid={os.getpid()}\n"
+        else:
+            self.send_response(404)
+            self.end_headers()
+            return
+        data = body.encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Connection", "close")
+        self.end_headers()
+        self.wfile.write(data)
+        self.wfile.flush()
+        self.close_connection = True
+
+    def log_message(self, format, *args):
+        pass
+
+HTTPServer.allow_reuse_address = True
+HTTPServer(("0.0.0.0", %d), Handler).serve_forever()
+`, token, snapshotPort)
+	server, err := sb.Exec(ctx, []string{"python3", "-c", serverScript}, ExecOptions{Workdir: "/workspace"})
+	if err != nil {
 		t.Fatal(err)
+	}
+	defer server.Kill(context.Background())
+
+	url, err := sb.ExposePort(ctx, snapshotPort)
+	if err != nil {
+		t.Fatal(err)
+	}
+	urls, err := sb.ListURLs(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if urls[snapshotPort] == "" {
+		t.Fatalf("expected listed URL for %d, got %#v", snapshotPort, urls)
+	}
+
+	waitSandboxURLContains(ctx, t, client, url+"/health", token, "ok")
+	waitSandboxURLContains(ctx, t, client, url+"/inc?by=7", token, "count=7")
+	waitSandboxURLContains(ctx, t, client, url+"/state", token, "count=7")
+
+	processes, err := sb.ListProcesses(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(processes) == 0 {
+		t.Fatal("expected server process before snapshot")
 	}
 
 	checkpointID, err := sb.SnapshotMemory(ctx)
@@ -623,6 +1163,12 @@ func TestIntegrationSandboxMemorySnapshot(t *testing.T) {
 		}
 		t.Fatal(err)
 	}
+
+	if err := sb.Terminate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	originalTerminated = true
+
 	restored, err := client.CreateSandboxFromMemorySnapshot(ctx, checkpointID)
 	if err != nil {
 		t.Fatal(err)
@@ -631,11 +1177,29 @@ func TestIntegrationSandboxMemorySnapshot(t *testing.T) {
 	if err := restored.WaitReady(ctx); err != nil {
 		t.Fatal(err)
 	}
-	data, err := restored.FS.Download(ctx, "/workspace/checkpoint.txt")
+	if restored.SandboxID() == sb.SandboxID() {
+		t.Fatalf("restore reused original sandbox id %s", restored.SandboxID())
+	}
+
+	restoredURLs, err := restored.ListURLs(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(data) != "checkpoint-data" {
-		t.Fatalf("checkpoint did not restore file state: %q", string(data))
+	restoredURL := restoredURLs[snapshotPort]
+	if restoredURL == "" {
+		t.Fatalf("expected restored listed URL for %d, got %#v", snapshotPort, restoredURLs)
+	}
+
+	body := waitSandboxURLContains(ctx, t, client, restoredURL+"/state", token, "count=7")
+	t.Logf("restored snapshot state: %s", strings.TrimSpace(body))
+	waitSandboxURLContains(ctx, t, client, restoredURL+"/inc?by=5", token, "count=12")
+	waitSandboxURLContains(ctx, t, client, restoredURL+"/state", token, "count=12")
+
+	restoredProcesses, err := restored.ListProcesses(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(restoredProcesses) == 0 {
+		t.Fatal("expected server process after restore")
 	}
 }

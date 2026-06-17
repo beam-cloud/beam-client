@@ -11,18 +11,19 @@ import (
 )
 
 type SandboxConfig struct {
-	Name          string
-	App           string
-	Image         *Image
-	CPU           float64
-	MemoryMiB     int64
-	GPU           string
-	GPUCount      uint32
-	KeepWarm      time.Duration
-	Ports         []int
-	Volumes       []VolumeMount
-	Secrets       []string
-	Env           map[string]string
+	Name      string
+	App       string
+	Image     *Image
+	CPU       float64
+	MemoryMiB int64
+	GPU       string
+	GPUCount  uint32
+	KeepWarm  time.Duration
+	Ports     []int
+	Volumes   []VolumeMount
+	Secrets   []string
+	Env       map[string]string
+	// SyncLocalDir uploads Workdir to the sandbox when true. The zero value is false.
 	SyncLocalDir  bool
 	Workdir       string
 	BlockNetwork  bool
@@ -145,19 +146,25 @@ func (s *Sandbox) Status(ctx context.Context) (SandboxStatus, error) {
 func (s *Sandbox) WaitReady(ctx context.Context) error {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
+	var lastErr error
 	for {
 		status, err := s.Status(ctx)
 		if err != nil {
-			return err
-		}
-		switch status.Status {
-		case "running", "ready":
-			return nil
-		case "failed", "error", "stopped", "terminated", "complete":
-			return sdkError(ErrSandboxConnection, "wait ready", "sandbox exited before becoming ready", nil)
+			lastErr = err
+		} else {
+			lastErr = nil
+			switch status.Status {
+			case "running", "ready":
+				return nil
+			case "failed", "error", "stopped", "terminated", "complete":
+				return sdkError(ErrSandboxConnection, "wait ready", "sandbox exited before becoming ready", nil)
+			}
 		}
 		select {
 		case <-ctx.Done():
+			if lastErr != nil {
+				return sdkError(ErrSandboxConnection, "wait ready", "last status check failed: "+lastErr.Error(), ctx.Err())
+			}
 			return wrapError(ErrSandboxConnection, "wait ready", ctx.Err())
 		case <-ticker.C:
 		}

@@ -2,6 +2,10 @@ package beam
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -35,6 +39,7 @@ type DockerRunOptions struct {
 type DockerBuildOptions struct {
 	Tag     string
 	File    string
+	Network string
 	NoCache bool
 	Pull    bool
 	Workdir string
@@ -45,6 +50,14 @@ type DockerComposeOptions struct {
 	Build   bool
 	Detach  bool
 	Workdir string
+}
+
+type composeConfig struct {
+	Services map[string]composeService `json:"services"`
+}
+
+type composeService struct {
+	Build json.RawMessage `json:"build"`
 }
 
 func (d *Docker) Run(ctx context.Context, image string, opts DockerRunOptions) (*Process, error) {
@@ -108,6 +121,13 @@ func (d *Docker) Build(ctx context.Context, contextPath string, opts DockerBuild
 	if opts.File != "" {
 		args = append(args, "-f", opts.File)
 	}
+	network := opts.Network
+	if network == "" {
+		network = "host"
+	}
+	if network != "" {
+		args = append(args, "--network", network)
+	}
 	if opts.NoCache {
 		args = append(args, "--no-cache")
 	}
@@ -145,8 +165,12 @@ func (d *Docker) Exec(ctx context.Context, container string, argv ...string) (*P
 
 func (d *Docker) ComposeUp(ctx context.Context, opts DockerComposeOptions) (*Process, error) {
 	args := []string{"docker", "compose"}
-	if opts.File != "" {
-		args = append(args, "-f", opts.File)
+	files, err := d.composeFiles(ctx, opts.File, opts.Workdir)
+	if err != nil {
+		return nil, err
+	}
+	for _, file := range files {
+		args = append(args, "-f", file)
 	}
 	args = append(args, "up")
 	if opts.Detach {
@@ -160,7 +184,11 @@ func (d *Docker) ComposeUp(ctx context.Context, opts DockerComposeOptions) (*Pro
 
 func (d *Docker) ComposeDown(ctx context.Context, file string, volumes bool, workdir string) (*Process, error) {
 	args := []string{"docker", "compose"}
-	if file != "" {
+	files, err := d.composeFiles(ctx, file, workdir)
+	if err != nil {
+		return nil, err
+	}
+	for _, file := range files {
 		args = append(args, "-f", file)
 	}
 	args = append(args, "down")
@@ -172,7 +200,11 @@ func (d *Docker) ComposeDown(ctx context.Context, file string, volumes bool, wor
 
 func (d *Docker) ComposeLogs(ctx context.Context, file string, follow bool, workdir string) (*Process, error) {
 	args := []string{"docker", "compose"}
-	if file != "" {
+	files, err := d.composeFiles(ctx, file, workdir)
+	if err != nil {
+		return nil, err
+	}
+	for _, file := range files {
 		args = append(args, "-f", file)
 	}
 	args = append(args, "logs")
@@ -197,6 +229,115 @@ func (d *Docker) Compose(ctx context.Context, args ...string) (*Process, error) 
 		return nil, sdkError(ErrValidation, "docker compose", "compose arguments are required", nil)
 	}
 	return d.exec(ctx, append([]string{"docker", "compose"}, args...), ExecOptions{})
+}
+
+func (d *Docker) composeFiles(ctx context.Context, file, workdir string) ([]string, error) {
+	if file == "" {
+		return nil, nil
+	}
+	overridePath, err := d.createComposeOverride(ctx, file, workdir)
+	if err != nil {
+		return nil, err
+	}
+	if overridePath == "" {
+		return []string{file}, nil
+	}
+	return []string{file, overridePath}, nil
+}
+
+func (d *Docker) createComposeOverride(ctx context.Context, file, workdir string) (string, error) {
+	services, buildServices, err := d.readComposeConfig(ctx, file, workdir)
+	if err != nil {
+		return "", err
+	}
+	if len(services) == 0 {
+		return "", nil
+	}
+
+	var content strings.Builder
+	content.WriteString("services:\n")
+	for _, service := range services {
+		fmt.Fprintf(&content, "  %q:\n", service)
+		content.WriteString("    network_mode: host\n")
+		content.WriteString("    pid: host\n")
+		if len(services) > 1 {
+			content.WriteString("    extra_hosts:\n")
+			for _, other := range services {
+				fmt.Fprintf(&content, "      - %q\n", other+":127.0.0.1")
+			}
+		}
+		if buildServices[service] {
+			content.WriteString("    build:\n")
+			content.WriteString("      network: host\n")
+		}
+	}
+
+	sum := sha256.Sum256([]byte(workdir + "\x00" + file))
+	overridePath := fmt.Sprintf("/tmp/.beam-compose-%x.yml", sum[:8])
+	if err := d.sandbox.FS.Upload(ctx, overridePath, []byte(content.String()), os.FileMode(0o644)); err != nil {
+		return "", err
+	}
+	return overridePath, nil
+}
+
+func (d *Docker) readComposeConfig(ctx context.Context, file, workdir string) ([]string, map[string]bool, error) {
+	proc, err := d.exec(ctx, []string{"docker", "compose", "-f", file, "config", "--format", "json"}, ExecOptions{Workdir: workdir})
+	if err == nil {
+		result, outputErr := proc.Output(ctx)
+		if outputErr == nil && result.ExitCode == 0 {
+			services, buildServices, parseErr := parseComposeConfig(result.Stdout)
+			if parseErr == nil && len(services) > 0 {
+				return services, buildServices, nil
+			}
+		}
+	}
+
+	proc, err = d.exec(ctx, []string{"docker", "compose", "-f", file, "config", "--services"}, ExecOptions{Workdir: workdir})
+	if err != nil {
+		return nil, nil, err
+	}
+	result, err := proc.Output(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	if result.ExitCode != 0 {
+		message := strings.TrimSpace(result.Stderr)
+		if message == "" {
+			message = strings.TrimSpace(result.Stdout)
+		}
+		if message == "" {
+			message = "docker compose config failed"
+		}
+		return nil, nil, sdkError(ErrProcess, "docker compose config", message, nil)
+	}
+
+	var services []string
+	for _, line := range strings.Split(result.Stdout, "\n") {
+		service := strings.TrimSpace(line)
+		if service != "" {
+			services = append(services, service)
+		}
+	}
+	sort.Strings(services)
+	return services, map[string]bool{}, nil
+}
+
+func parseComposeConfig(raw string) ([]string, map[string]bool, error) {
+	var config composeConfig
+	if err := json.Unmarshal([]byte(raw), &config); err != nil {
+		return nil, nil, err
+	}
+	services := make([]string, 0, len(config.Services))
+	buildServices := map[string]bool{}
+	for name, service := range config.Services {
+		services = append(services, name)
+		build := strings.TrimSpace(string(service.Build))
+		if build != "" && build != "null" {
+			buildServices[name] = true
+		}
+	}
+	sort.Strings(services)
+	return services, buildServices, nil
 }
 
 func (d *Docker) WaitReady(ctx context.Context) error {

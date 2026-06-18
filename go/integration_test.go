@@ -814,6 +814,7 @@ func TestIntegrationDockerSmoke(t *testing.T) {
 	suffix := fmt.Sprintf("%s-%d", runtimeName, time.Now().UnixNano())
 	logContainer := "beam-go-docker-log-" + suffix
 	composeContainer := "beam-go-docker-compose-" + suffix
+	const composePort = 8781
 	imageTag := "beam-go-docker-built:" + suffix
 	buildDir := "/workspace/docker-build-" + suffix
 	composeDir := "/workspace/docker-compose-" + suffix
@@ -928,13 +929,21 @@ func TestIntegrationDockerSmoke(t *testing.T) {
 	if err := sb.FS.Mkdir(ctx, composeDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	if err := sb.FS.Mkdir(ctx, composeDir+"/site", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	composePayload := "compose-http-ok-" + suffix
+	if err := sb.FS.Upload(ctx, composeDir+"/site/index.txt", []byte(composePayload+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	composeFile := fmt.Sprintf(`services:
   app:
     image: busybox:1.36
     container_name: %s
-    network_mode: host
-    command: sh -c "echo compose-helper-ok; while true; do sleep 1; done"
-`, composeContainer)
+    volumes:
+      - "%s/site:/site:ro"
+    command: sh -c "echo compose-http-ready; exec httpd -f -p %d -h /site"
+`, composeContainer, composeDir, composePort)
 	if err := sb.FS.Upload(ctx, composeDir+"/compose.yml", []byte(composeFile), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -947,8 +956,14 @@ func TestIntegrationDockerSmoke(t *testing.T) {
 
 	composeLogs := requireProcessContainsEventually(ctx, t, func() (*Process, error) {
 		return sb.Docker.ComposeLogs(ctx, "compose.yml", false, composeDir)
-	}, "compose-helper-ok")
+	}, "compose-http-ready")
 	t.Logf("docker compose logs output: %s", strings.TrimSpace(composeLogs.Stdout+composeLogs.Stderr))
+
+	composeURL, err := sb.ExposePort(ctx, composePort)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitSandboxURLContains(ctx, t, client, composeURL+"/index.txt", composePayload)
 
 	composePs, err := sb.Docker.Compose(ctx, "-f", composeDir+"/compose.yml", "ps", "--all")
 	if err != nil {
@@ -970,7 +985,7 @@ func integrationRuntimeName() string {
 	if pool := os.Getenv("BEAM_TEST_POOL"); pool != "" {
 		return strings.ToLower(strings.ReplaceAll(pool, "_", "-"))
 	}
-	return "runc"
+	return "default"
 }
 
 func requireProcessSuccess(ctx context.Context, t *testing.T, proc *Process) *ProcessResult {

@@ -123,14 +123,14 @@ typecheck = ["mypy"]
 
 [[package]]
 name = "beta9"
-version = "0.1.245"
+version = "0.1.247"
 description = ""
 optional = false
 python-versions = "<4.0,>=3.8"
 groups = ["main"]
 files = [
-    {file = "beta9-0.1.245-py3-none-any.whl", hash = "sha256:3e6dcccb1b9c5d907e9f2de09047b74ff4d2f4eaf3227ffc68d4d625bd690129"},
-    {file = "beta9-0.1.245.tar.gz", hash = "sha256:00a8da2fd35e094b769f770826768a6903ef9047885075902bb7317ec5134e03"},
+    {file = "beta9-0.1.247-py3-none-any.whl", hash = "sha256:e764ee010f18684f3469e4a9dfd769967271b9cfa6443cc94395f526605d479f"},
+    {file = "beta9-0.1.247.tar.gz", hash = "sha256:514e6e7d3f6f7825fc8af6f36d58418c40c4cf3f850bf70ebedac909f1467cf1"},
 ]
 
 [package.dependencies]
@@ -140,20 +140,20 @@ click = ">=8.1.7,<9.0.0"
 cloudpickle = ">=3.0.0,<4.0.0"
 croniter = ">=3.0.3,<4.0.0"
 fastapi = ">=0.115.11,<1.0.0"
-grpcio = "1.69.0"
+grpcio = ">=1.69.0,<2.0.0"
 grpclib = ">=0.4.7,<1.0.0"
 paramiko = ">=3.5.0,<4.0.0"
 prompt-toolkit = ">=3.0.48,<4.0.0"
-protobuf = ">=4.25.1,<5.0.0"
+protobuf = ">=4.25.1,<7.0.0"
 pyyaml = ">=6.0.0,<7.0.0"
 requests = ">=2.32.3,<3.0.0"
-rich = ">=13.9.4,<14.0.0"
+rich = ">=13.9.4,<15.0.0"
 typeguard = ">=2.13.3,<3.0.0"
 typing-extensions = ">=4.7.1,<5.0.0"
 uvicorn = ">=0.29.0,<1.0.0"
 watchdog = ">=4.0.0,<5.0.0"
 websocket-client = ">=1.8.0,<2.0.0"
-websockets = ">=13,<14"
+websockets = ">=13,<16"
 
 [[package]]
 name = "betterproto-beta9"
@@ -1805,4 +1805,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.8"
-content-hash = "84a8bd5ab0389605d8f1ae9069f0890f42a82bda24c1d4fcfc3fab3292c7516f"
+content-hash = "66df7823b8a596e58340de943a279eff08df65f010b7644944de941300fb64f3"

@@ -19,8 +19,17 @@ go run ./examples/sync-local-dir
 BEAM_DOCKER_POOL=gvisor go run ./examples/docker
 ```
 
+Install the SDK from GitHub:
+
+```bash
+go get github.com/beam-cloud/beam-client/go@latest
+```
+
 `SandboxConfig.SyncLocalDir` is optional and defaults to false. Only the
 `sync-local-dir` example opts into uploading a local directory to `/mnt/code`.
+
+The examples use `SandboxConfig.Name` as the app name that groups related
+sandboxes.
 
 Notes:
 

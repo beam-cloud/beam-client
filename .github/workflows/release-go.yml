@@ -1,0 +1,99 @@
+name: Go SDK release
+
+on:
+  push:
+    tags:
+      - "go/v*"
+  release:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      version_tag:
+        description: Go SDK tag to verify, for example go/v0.1.0
+        required: true
+        type: string
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.event_name == 'push' || (github.event_name == 'release' && startsWith(github.ref_name, 'go/v')) || inputs.version_tag != ''
+    name: Verify Go module release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve version tag
+        id: version
+        run: |
+          if [[ -n "${{ inputs.version_tag }}" ]]; then
+            tag="${{ inputs.version_tag }}"
+          else
+            tag="${GITHUB_REF_NAME}"
+          fi
+
+          if [[ ! "$tag" =~ ^go/v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Go SDK releases must use tags like go/v0.1.0" >&2
+            exit 1
+          fi
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#go/v}" >> "$GITHUB_OUTPUT"
+          echo "module_version=v${tag#go/v}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+          cache-dependency-path: go/go.sum
+
+      - name: Test module
+        working-directory: go
+        run: GOROOT= go test ./...
+
+      - name: Verify GitHub install
+        run: |
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          cd "$tmp"
+          go mod init example.com/beam-install-check
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            go mod edit -replace github.com/beam-cloud/beam-client/go="$GITHUB_WORKSPACE/go"
+            go get github.com/beam-cloud/beam-client/go
+          else
+            go get github.com/beam-cloud/beam-client/go@${{ steps.version.outputs.module_version }}
+          fi
+
+          printf '%s\n' \
+            'package main' \
+            '' \
+            'import beam "github.com/beam-cloud/beam-client/go"' \
+            '' \
+            'func main() {' \
+            '    _ = beam.NewImage()' \
+            '}' > main.go
+
+          go test ./...
+
+      - name: Release summary
+        run: |
+          {
+            echo "## Go SDK release"
+            echo
+            echo "- Module: \`github.com/beam-cloud/beam-client/go\`"
+            echo "- Version: \`${{ steps.version.outputs.version }}\`"
+            echo "- Tag: \`${{ steps.version.outputs.tag }}\`"
+            echo
+            echo "Install:"
+            echo
+            echo "\`\`\`bash"
+            echo "go get github.com/beam-cloud/beam-client/go@${{ steps.version.outputs.module_version }}"
+            echo "\`\`\`"
+          } >> "$GITHUB_STEP_SUMMARY"

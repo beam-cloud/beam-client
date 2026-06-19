@@ -21,8 +21,7 @@ func main() {
 	defer client.Close()
 
 	sandbox, err := client.CreateSandbox(ctx, beam.SandboxConfig{
-		Name:      "go-snapshot",
-		App:       "go-sdk-examples",
+		Name:      "go-sdk-examples",
 		Image:     beam.NewImage(beam.WithPythonVersion("python3.11")),
 		CPU:       1,
 		MemoryMiB: 256,

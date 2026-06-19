@@ -15,9 +15,8 @@ import (
 
 // SandboxConfig configures a new sandbox.
 //
-// Name is the Beam stub name. App is the application namespace; when App is
-// empty, Name is also used as the app namespace to match existing Beam sandbox
-// behavior. SyncLocalDir defaults to false.
+// Name is the app name that groups related sandboxes. SyncLocalDir defaults to
+// false.
 type SandboxConfig struct {
 	Name  string
 	App   string

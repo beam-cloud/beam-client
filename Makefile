@@ -1,4 +1,4 @@
-.PHONY: test test-go test-go-integration test-go-integration-sync test-go-integration-snapshot test-go-integration-runc test-go-integration-gvisor test-go-integration-docker test-go-integration-docker-runc test-go-integration-docker-gvisor test-go-integration-volumes test-go-integration-volumes-runc test-go-integration-volumes-gvisor test-go-integration-runtime-matrix test-python tidy-go
+.PHONY: test test-go test-go-integration test-go-integration-sync test-go-integration-snapshot test-go-integration-runc test-go-integration-gvisor test-go-integration-docker test-go-integration-docker-runc test-go-integration-docker-gvisor test-go-integration-volumes test-go-integration-volumes-runc test-go-integration-volumes-gvisor test-go-integration-runtime-matrix test-python tidy-go verify-go-install
 
 RUNC_POOL_ENV = $${BEAM_TEST_RUNC_POOL:+BEAM_TEST_POOL=$$BEAM_TEST_RUNC_POOL}
 
@@ -45,3 +45,20 @@ test-python:
 
 tidy-go:
 	cd go && GOROOT= go mod tidy
+
+verify-go-install:
+	tmp=$$(mktemp -d); \
+	trap 'rm -rf "$$tmp"' EXIT; \
+	cd "$$tmp"; \
+	GOROOT= go mod init example.com/beam-install-check; \
+	GOROOT= go mod edit -replace github.com/beam-cloud/beam-client/go=$(CURDIR)/go; \
+	GOROOT= go get github.com/beam-cloud/beam-client/go; \
+	printf '%s\n' \
+		'package main' \
+		'' \
+		'import beam "github.com/beam-cloud/beam-client/go"' \
+		'' \
+		'func main() {' \
+		'	_ = beam.NewImage()' \
+		'}' > main.go; \
+	GOROOT= go test ./...

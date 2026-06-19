@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: Go SDK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+          cache-dependency-path: go/go.sum
+
+      - name: Test
+        working-directory: go
+        run: GOROOT= go test ./...
+
+      - name: Verify local module import
+        run: make verify-go-install
+
+  python:
+    name: Python package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install build tooling
+        run: python -m pip install --upgrade build poetry
+
+      - name: Install dependencies
+        working-directory: python
+        run: poetry install --no-interaction
+
+      - name: Test
+        working-directory: python
+        run: poetry run pytest || test $? -eq 5
+
+      - name: Build wheel
+        working-directory: python
+        run: python -m build --wheel

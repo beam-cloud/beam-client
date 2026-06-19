@@ -66,6 +66,24 @@ cd python && poetry build -f wheel
 
 The Go module is `github.com/beam-cloud/beam-client/go`.
 
+Install:
+
+```bash
+go get github.com/beam-cloud/beam-client/go@latest
+```
+
+Pin a release:
+
+```bash
+go get github.com/beam-cloud/beam-client/go@v0.1.0
+```
+
+Import:
+
+```go
+import beam "github.com/beam-cloud/beam-client/go"
+```
+
 ### Configuration
 
 `beam.NewClient(ctx)` resolves configuration in this order:
@@ -86,9 +104,9 @@ export BEAM_GATEWAY_PORT=1993
 
 ### Sandboxes
 
-`SandboxConfig.Name` is the Beam stub name. `SandboxConfig.App` is the app
-namespace. If `App` is empty, `Name` is also used as the namespace to preserve
-the current Beam sandbox behavior.
+Set `SandboxConfig.Name` to the app name that groups related sandboxes. Each
+created sandbox still has a generated container ID, available from
+`sandbox.SandboxID()`.
 
 `SandboxConfig.SyncLocalDir` is optional and defaults to false. Set it to true
 only when you want to upload `Workdir` into the sandbox code mount at `/mnt/code`.
@@ -143,7 +161,6 @@ gVisor sandbox runtimes.
 ```go
 sandbox, err := client.CreateSandbox(ctx, beam.SandboxConfig{
     Name:          "docker-example",
-    App:           "go-sdk-examples",
     Image:         beam.NewImage(beam.WithPythonVersion("python3.11")).WithDocker(),
     DockerEnabled: true,
     Pool:          &beam.PoolConfig{Name: "gvisor"},
@@ -176,3 +193,25 @@ go run ./examples/snapshot
 go run ./examples/sync-local-dir
 BEAM_DOCKER_POOL=gvisor go run ./examples/docker
 ```
+
+## Releases
+
+Python CLI: create a GitHub release named `cli-X.Y.Z`. `release-cli.yml` builds
+the wheel from `python/` and embeds it in the platform CLI binaries with PyApp.
+
+Go SDK: tag the `go/` submodule as `go/vX.Y.Z`:
+
+```bash
+git tag go/v0.1.0
+git push origin go/v0.1.0
+```
+
+Go users request the module version without the subdirectory prefix:
+
+```bash
+go get github.com/beam-cloud/beam-client/go@v0.1.0
+```
+
+`release-go.yml` checks the tag shape, runs Go tests, and verifies that a fresh
+module can fetch and import `github.com/beam-cloud/beam-client/go` from GitHub.
+The Go SDK publishes through the Git tag; it has no binary artifact.

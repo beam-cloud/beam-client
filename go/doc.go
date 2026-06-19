@@ -14,9 +14,8 @@
 //		beam.WithTLS(false),
 //	)
 //
-// SandboxConfig.Name is the Beam stub name. SandboxConfig.App is the app
-// namespace; when App is empty, Name is used as the namespace to match the
-// existing Beam sandbox behavior.
+// SandboxConfig.Name is the app name that groups related sandboxes. SandboxID
+// returns the generated container ID for a running sandbox.
 //
 // Process output is consumptive. Process.Stdout.Read and Process.Stderr.Read
 // return server-side deltas, so callers that need a complete result should use

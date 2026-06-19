@@ -27,8 +27,7 @@ func main() {
 	}
 
 	sandbox, err := client.CreateSandbox(ctx, beam.SandboxConfig{
-		Name:          "go-docker",
-		App:           "go-sdk-examples",
+		Name:          "go-sdk-examples",
 		Image:         beam.NewImage(beam.WithPythonVersion("python3.11")).WithDocker(),
 		CPU:           2,
 		MemoryMiB:     2048,

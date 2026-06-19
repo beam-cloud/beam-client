@@ -9,10 +9,12 @@ import (
 	pb "github.com/beam-cloud/beta9/proto"
 )
 
+// FileSystem exposes file operations inside a sandbox.
 type FileSystem struct {
 	sandbox *Sandbox
 }
 
+// FileInfo describes a file or directory in a sandbox.
 type FileInfo struct {
 	Name        string
 	Mode        int32
@@ -24,22 +26,26 @@ type FileInfo struct {
 	Permissions uint32
 }
 
+// FileSearchResult is one file's search results.
 type FileSearchResult struct {
 	Path    string
 	Matches []FileSearchMatch
 }
 
+// FileSearchMatch is one text match in a file.
 type FileSearchMatch struct {
 	Content string
 	Start   FilePosition
 	End     FilePosition
 }
 
+// FilePosition is a one-based line and column position.
 type FilePosition struct {
 	Line   int
 	Column int
 }
 
+// Upload writes data to sandboxPath.
 func (fsys *FileSystem) Upload(ctx context.Context, sandboxPath string, data []byte, mode os.FileMode) error {
 	if mode == 0 {
 		mode = 0o644
@@ -59,6 +65,7 @@ func (fsys *FileSystem) Upload(ctx context.Context, sandboxPath string, data []b
 	return nil
 }
 
+// UploadFile uploads a local file to sandboxPath.
 func (fsys *FileSystem) UploadFile(ctx context.Context, localPath, sandboxPath string) error {
 	data, err := os.ReadFile(localPath)
 	if err != nil {
@@ -71,6 +78,7 @@ func (fsys *FileSystem) UploadFile(ctx context.Context, localPath, sandboxPath s
 	return fsys.Upload(ctx, sandboxPath, data, info.Mode())
 }
 
+// Download reads a sandbox file into memory.
 func (fsys *FileSystem) Download(ctx context.Context, sandboxPath string) ([]byte, error) {
 	res, err := fsys.sandbox.client.pod.SandboxDownloadFile(ctx, &pb.PodSandboxDownloadFileRequest{
 		ContainerId:   fsys.sandbox.containerID,
@@ -85,6 +93,7 @@ func (fsys *FileSystem) Download(ctx context.Context, sandboxPath string) ([]byt
 	return res.GetData(), nil
 }
 
+// DownloadFile downloads a sandbox file to localPath.
 func (fsys *FileSystem) DownloadFile(ctx context.Context, sandboxPath, localPath string) error {
 	data, err := fsys.Download(ctx, sandboxPath)
 	if err != nil {
@@ -99,6 +108,7 @@ func (fsys *FileSystem) DownloadFile(ctx context.Context, sandboxPath, localPath
 	return nil
 }
 
+// Stat returns metadata for sandboxPath.
 func (fsys *FileSystem) Stat(ctx context.Context, sandboxPath string) (FileInfo, error) {
 	res, err := fsys.sandbox.client.pod.SandboxStatFile(ctx, &pb.PodSandboxStatFileRequest{
 		ContainerId:   fsys.sandbox.containerID,
@@ -113,6 +123,7 @@ func (fsys *FileSystem) Stat(ctx context.Context, sandboxPath string) (FileInfo,
 	return fileInfoFromProto(res.GetFileInfo()), nil
 }
 
+// List lists files directly under sandboxPath.
 func (fsys *FileSystem) List(ctx context.Context, sandboxPath string) ([]FileInfo, error) {
 	res, err := fsys.sandbox.client.pod.SandboxListFiles(ctx, &pb.PodSandboxListFilesRequest{
 		ContainerId:   fsys.sandbox.containerID,
@@ -131,6 +142,7 @@ func (fsys *FileSystem) List(ctx context.Context, sandboxPath string) ([]FileInf
 	return out, nil
 }
 
+// Mkdir creates a directory in the sandbox.
 func (fsys *FileSystem) Mkdir(ctx context.Context, sandboxPath string, mode os.FileMode) error {
 	if mode == 0 {
 		mode = 0o755
@@ -149,6 +161,7 @@ func (fsys *FileSystem) Mkdir(ctx context.Context, sandboxPath string, mode os.F
 	return nil
 }
 
+// RemoveFile removes a sandbox file.
 func (fsys *FileSystem) RemoveFile(ctx context.Context, sandboxPath string) error {
 	res, err := fsys.sandbox.client.pod.SandboxDeleteFile(ctx, &pb.PodSandboxDeleteFileRequest{
 		ContainerId:   fsys.sandbox.containerID,
@@ -163,6 +176,7 @@ func (fsys *FileSystem) RemoveFile(ctx context.Context, sandboxPath string) erro
 	return nil
 }
 
+// RemoveDir removes a sandbox directory.
 func (fsys *FileSystem) RemoveDir(ctx context.Context, sandboxPath string) error {
 	res, err := fsys.sandbox.client.pod.SandboxDeleteDirectory(ctx, &pb.PodSandboxDeleteDirectoryRequest{
 		ContainerId:   fsys.sandbox.containerID,
@@ -177,6 +191,7 @@ func (fsys *FileSystem) RemoveDir(ctx context.Context, sandboxPath string) error
 	return nil
 }
 
+// Replace replaces pattern with replacement under sandboxPath.
 func (fsys *FileSystem) Replace(ctx context.Context, sandboxPath, pattern, replacement string) error {
 	res, err := fsys.sandbox.client.pod.SandboxReplaceInFiles(ctx, &pb.PodSandboxReplaceInFilesRequest{
 		ContainerId:   fsys.sandbox.containerID,
@@ -193,6 +208,7 @@ func (fsys *FileSystem) Replace(ctx context.Context, sandboxPath, pattern, repla
 	return nil
 }
 
+// Find searches file contents under sandboxPath with a regex pattern.
 func (fsys *FileSystem) Find(ctx context.Context, sandboxPath, pattern string) ([]FileSearchResult, error) {
 	res, err := fsys.sandbox.client.pod.SandboxFindInFiles(ctx, &pb.PodSandboxFindInFilesRequest{
 		ContainerId:   fsys.sandbox.containerID,

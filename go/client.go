@@ -14,7 +14,7 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// Client is a Beam API client.
+// Client is a Beam API client backed by gRPC services.
 type Client struct {
 	conn     *grpc.ClientConn
 	ownsConn bool
@@ -47,6 +47,7 @@ type clientOptions struct {
 // Option configures a Client.
 type Option func(*clientOptions)
 
+// WithToken sets the Beam API token used for authorization metadata.
 func WithToken(token string) Option {
 	return func(o *clientOptions) {
 		o.token = token
@@ -54,6 +55,7 @@ func WithToken(token string) Option {
 	}
 }
 
+// WithGateway sets the gateway host and port.
 func WithGateway(host string, port int) Option {
 	return func(o *clientOptions) {
 		o.host = host
@@ -61,24 +63,28 @@ func WithGateway(host string, port int) Option {
 	}
 }
 
+// WithAddress sets the gateway address as "host:port".
 func WithAddress(address string) Option {
 	return func(o *clientOptions) {
 		o.address = address
 	}
 }
 
+// WithConfigPath sets the Beam/Beta9 config file path used for defaults.
 func WithConfigPath(path string) Option {
 	return func(o *clientOptions) {
 		o.configPath = path
 	}
 }
 
+// WithConfigContext sets the named config context to load.
 func WithConfigContext(name string) Option {
 	return func(o *clientOptions) {
 		o.contextName = name
 	}
 }
 
+// WithTLS controls whether the gateway connection uses TLS.
 func WithTLS(enabled bool) Option {
 	return func(o *clientOptions) {
 		o.tls = enabled
@@ -86,18 +92,21 @@ func WithTLS(enabled bool) Option {
 	}
 }
 
+// WithDialOptions appends raw gRPC dial options after SDK defaults.
 func WithDialOptions(opts ...grpc.DialOption) Option {
 	return func(o *clientOptions) {
 		o.dialOptions = append(o.dialOptions, opts...)
 	}
 }
 
+// WithUnaryInterceptors appends unary client interceptors after SDK auth.
 func WithUnaryInterceptors(interceptors ...grpc.UnaryClientInterceptor) Option {
 	return func(o *clientOptions) {
 		o.unary = append(o.unary, interceptors...)
 	}
 }
 
+// WithStreamInterceptors appends stream client interceptors after SDK auth.
 func WithStreamInterceptors(interceptors ...grpc.StreamClientInterceptor) Option {
 	return func(o *clientOptions) {
 		o.stream = append(o.stream, interceptors...)
@@ -111,13 +120,18 @@ func WithGRPCConn(conn *grpc.ClientConn) Option {
 	}
 }
 
+// WithHTTPClient sets the HTTP client used for presigned object uploads.
 func WithHTTPClient(client *http.Client) Option {
 	return func(o *clientOptions) {
 		o.httpClient = client
 	}
 }
 
-// NewClient creates a Beam client.
+// NewClient creates a Beam client and dials the configured gateway.
+//
+// Defaults are resolved from BEAM_TOKEN, BEAM_GATEWAY_HOST, BEAM_GATEWAY_PORT,
+// then the corresponding BETA9_* variables, then the user's config file, then
+// gateway.beam.cloud:443.
 func NewClient(ctx context.Context, opts ...Option) (*Client, error) {
 	var options clientOptions
 	for _, opt := range opts {
@@ -162,6 +176,7 @@ func NewClient(ctx context.Context, opts ...Option) (*Client, error) {
 
 	dialCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
+	//lint:ignore SA1019 grpc.NewClient does not accept a context for bounding the initial dial.
 	conn, err := grpc.DialContext(dialCtx, cfg.address(), dialOptions...)
 	if err != nil {
 		return nil, sdkError(ErrSandboxConnection, "dial gateway", err.Error(), err)
@@ -179,6 +194,8 @@ func (c *Client) initServices() {
 	c.volume = pb.NewVolumeServiceClient(c.conn)
 }
 
+// Close closes the owned gRPC connection. It is a no-op for clients created
+// with WithGRPCConn.
 func (c *Client) Close() error {
 	if c == nil || c.conn == nil || !c.ownsConn {
 		return nil
@@ -186,6 +203,7 @@ func (c *Client) Close() error {
 	return c.conn.Close()
 }
 
+// Config returns a copy of the resolved client configuration.
 func (c *Client) Config() ClientConfig {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -199,11 +217,14 @@ func (c *Client) Config() ClientConfig {
 	}
 }
 
+// Workspace describes the workspace returned by Authorize.
 type Workspace struct {
 	ID    string
 	Token string
 }
 
+// Authorize verifies credentials with the gateway and stores a refreshed token
+// when the gateway returns one.
 func (c *Client) Authorize(ctx context.Context) (*Workspace, error) {
 	res, err := c.gateway.Authorize(ctx, &pb.AuthorizeRequest{})
 	if err != nil {

@@ -8,12 +8,15 @@ import (
 	pb "github.com/beam-cloud/beta9/proto"
 )
 
+// ExecOptions configures a process execution inside a sandbox.
 type ExecOptions struct {
 	Workdir string
 	Env     map[string]string
+	// Timeout bounds the initial exec RPC, not the lifetime of the process.
 	Timeout time.Duration
 }
 
+// Process is a process running inside a sandbox.
 type Process struct {
 	sandbox *Sandbox
 	PID     int
@@ -21,12 +24,14 @@ type Process struct {
 	Stderr  *OutputReader
 }
 
+// ProcessStatus describes a process status returned by the sandbox.
 type ProcessStatus struct {
 	Running  bool
 	Status   string
 	ExitCode int
 }
 
+// ProcessInfo is a server-backed process listing entry.
 type ProcessInfo struct {
 	PID      int
 	Running  bool
@@ -36,22 +41,26 @@ type ProcessInfo struct {
 	ExitCode int
 }
 
+// ProcessResult contains a completed process exit code and remaining output.
 type ProcessResult struct {
 	ExitCode int
 	Stdout   string
 	Stderr   string
 }
 
+// LogEntry is a stdout or stderr chunk emitted by Process.Stream.
 type LogEntry struct {
 	Stream string
 	Data   string
 }
 
+// OutputReader reads consumptive server-side stdout or stderr deltas.
 type OutputReader struct {
 	process *Process
 	stream  string
 }
 
+// Exec runs argv inside the sandbox with shell-safe quoting.
 func (s *Sandbox) Exec(ctx context.Context, argv []string, opts ExecOptions) (*Process, error) {
 	if len(argv) == 0 {
 		return nil, sdkError(ErrValidation, "exec", "argv must not be empty", nil)
@@ -59,6 +68,7 @@ func (s *Sandbox) Exec(ctx context.Context, argv []string, opts ExecOptions) (*P
 	return s.ExecShell(ctx, quoteArgv(argv), opts)
 }
 
+// ExecShell runs command text as-is through Beam's shell-command RPC.
 func (s *Sandbox) ExecShell(ctx context.Context, command string, opts ExecOptions) (*Process, error) {
 	if strings.TrimSpace(command) == "" {
 		return nil, sdkError(ErrValidation, "exec", "command must not be empty", nil)
@@ -91,6 +101,7 @@ func (s *Sandbox) ExecShell(ctx context.Context, command string, opts ExecOption
 	return p, nil
 }
 
+// RunCode executes Python code in the sandbox and waits for completion.
 func (s *Sandbox) RunCode(ctx context.Context, code string, opts ExecOptions) (*ProcessResult, error) {
 	p, err := s.Exec(ctx, []string{"python3", "-c", code}, opts)
 	if err != nil {
@@ -99,6 +110,7 @@ func (s *Sandbox) RunCode(ctx context.Context, code string, opts ExecOptions) (*
 	return p.Output(ctx)
 }
 
+// Status returns the current process status.
 func (p *Process) Status(ctx context.Context) (ProcessStatus, error) {
 	res, err := p.sandbox.client.pod.SandboxStatus(ctx, &pb.PodSandboxStatusRequest{
 		ContainerId: p.sandbox.containerID,
@@ -118,6 +130,7 @@ func (p *Process) Status(ctx context.Context) (ProcessStatus, error) {
 	}, nil
 }
 
+// Wait blocks until the process exits and returns its exit code.
 func (p *Process) Wait(ctx context.Context) (int, error) {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
@@ -137,6 +150,7 @@ func (p *Process) Wait(ctx context.Context) (int, error) {
 	}
 }
 
+// Kill terminates the process.
 func (p *Process) Kill(ctx context.Context) error {
 	res, err := p.sandbox.client.pod.SandboxKill(ctx, &pb.PodSandboxKillRequest{
 		ContainerId: p.sandbox.containerID,
@@ -151,6 +165,7 @@ func (p *Process) Kill(ctx context.Context) error {
 	return nil
 }
 
+// Output waits for the process, then reads remaining stdout and stderr deltas.
 func (p *Process) Output(ctx context.Context) (*ProcessResult, error) {
 	exit, err := p.Wait(ctx)
 	if err != nil {
@@ -167,6 +182,7 @@ func (p *Process) Output(ctx context.Context) (*ProcessResult, error) {
 	return &ProcessResult{ExitCode: exit, Stdout: stdout, Stderr: stderr}, nil
 }
 
+// Stream polls stdout and stderr deltas until the process exits.
 func (p *Process) Stream(ctx context.Context, sink func(LogEntry)) (int, error) {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
@@ -214,6 +230,8 @@ func (p *Process) Stream(ctx context.Context, sink func(LogEntry)) (int, error) 
 	}
 }
 
+// Read returns the next available stdout or stderr delta. Reads are consumptive:
+// the same output is not returned again by subsequent calls.
 func (r *OutputReader) Read(ctx context.Context) (string, error) {
 	if r == nil || r.process == nil {
 		return "", sdkError(ErrValidation, "read output", "process is nil", nil)
@@ -248,6 +266,7 @@ func (r *OutputReader) Read(ctx context.Context) (string, error) {
 	}
 }
 
+// ListProcesses returns the current server-side process list for the sandbox.
 func (s *Sandbox) ListProcesses(ctx context.Context) ([]ProcessInfo, error) {
 	res, err := s.client.pod.SandboxListProcesses(ctx, &pb.PodSandboxListProcessesRequest{ContainerId: s.containerID})
 	if err != nil {

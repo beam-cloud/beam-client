@@ -23,6 +23,7 @@ type Error struct {
 	Err     error
 }
 
+// Error returns a formatted SDK error string.
 func (e *Error) Error() string {
 	if e == nil {
 		return ""
@@ -43,6 +44,7 @@ func (e *Error) Error() string {
 	return fmt.Sprintf("%s %s: %s", e.Code, e.Op, msg)
 }
 
+// Unwrap returns the wrapped lower-level error, when present.
 func (e *Error) Unwrap() error {
 	if e == nil {
 		return nil

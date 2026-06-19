@@ -105,6 +105,8 @@ type fakePodService struct {
 	createReq       *pb.CreatePodRequest
 	execReq         *pb.PodSandboxExecRequest
 	uploadReq       *pb.PodSandboxUploadFileRequest
+	exposeURL       string
+	listURLs        map[int32]string
 	statusResponses []*pb.PodSandboxStatusResponse
 	stdoutResponses []string
 	stderrResponses []string
@@ -191,11 +193,19 @@ func (s *fakePodService) SandboxDeleteDirectory(context.Context, *pb.PodSandboxD
 }
 
 func (s *fakePodService) SandboxExposePort(context.Context, *pb.PodSandboxExposePortRequest) (*pb.PodSandboxExposePortResponse, error) {
-	return &pb.PodSandboxExposePortResponse{Ok: true, Url: "https://sandbox.example"}, nil
+	exposeURL := s.exposeURL
+	if exposeURL == "" {
+		exposeURL = "https://sandbox.example"
+	}
+	return &pb.PodSandboxExposePortResponse{Ok: true, Url: exposeURL}, nil
 }
 
 func (s *fakePodService) SandboxListUrls(context.Context, *pb.PodSandboxListUrlsRequest) (*pb.PodSandboxListUrlsResponse, error) {
-	return &pb.PodSandboxListUrlsResponse{Ok: true, Urls: map[int32]string{8080: "https://sandbox.example"}}, nil
+	urls := s.listURLs
+	if urls == nil {
+		urls = map[int32]string{8080: "https://sandbox.example"}
+	}
+	return &pb.PodSandboxListUrlsResponse{Ok: true, Urls: urls}, nil
 }
 
 func (s *fakePodService) SandboxUpdateTTL(context.Context, *pb.PodSandboxUpdateTTLRequest) (*pb.PodSandboxUpdateTTLResponse, error) {
@@ -290,6 +300,39 @@ func TestAuthorizeSendsBearerToken(t *testing.T) {
 	}
 	if !reflect.DeepEqual(services.gateway.authHeader, []string{"Bearer token-next"}) {
 		t.Fatalf("refreshed token was not used: %#v", services.gateway.authHeader)
+	}
+}
+
+func TestSandboxExposedURLsUseConfiguredLoopbackHost(t *testing.T) {
+	client, services := newFakeClient(t)
+	client.mu.Lock()
+	client.config.GatewayHost = "127.0.0.1"
+	client.mu.Unlock()
+
+	services.pod.exposeURL = "http://localhost:1994/sandbox/id/container-123/8080"
+	services.pod.listURLs = map[int32]string{
+		8080: "http://localhost:1994/sandbox/id/container-123/8080",
+		9000: "https://sandbox.example/9000",
+	}
+	sandbox := &Sandbox{client: client, containerID: "container-123", stubID: "stub-123"}
+
+	exposedURL, err := sandbox.ExposePort(context.Background(), 8080)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exposedURL != "http://127.0.0.1:1994/sandbox/id/container-123/8080" {
+		t.Fatalf("unexpected exposed URL: %s", exposedURL)
+	}
+
+	urls, err := sandbox.ListURLs(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if urls[8080] != "http://127.0.0.1:1994/sandbox/id/container-123/8080" {
+		t.Fatalf("unexpected listed local URL: %#v", urls)
+	}
+	if urls[9000] != "https://sandbox.example/9000" {
+		t.Fatalf("unexpected non-local URL rewrite: %#v", urls)
 	}
 }
 

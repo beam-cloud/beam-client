@@ -2,19 +2,28 @@ package beam
 
 import (
 	"context"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	pb "github.com/beam-cloud/beta9/proto"
 )
 
+// SandboxConfig configures a new sandbox.
+//
+// Name is the Beam stub name. App is the application namespace; when App is
+// empty, Name is also used as the app namespace to match existing Beam sandbox
+// behavior. SyncLocalDir defaults to false.
 type SandboxConfig struct {
-	Name      string
-	App       string
-	Image     *Image
-	CPU       float64
+	Name  string
+	App   string
+	Image *Image
+	CPU   float64
+	// MemoryMiB is the memory allocation in MiB.
 	MemoryMiB int64
 	GPU       string
 	GPUCount  uint32
@@ -32,24 +41,32 @@ type SandboxConfig struct {
 	Pool          *PoolConfig
 }
 
+// Sandbox is a running Beam sandbox.
 type Sandbox struct {
 	client      *Client
 	containerID string
 	stubID      string
-	FS          *FileSystem
-	Docker      *Docker
+	// FS exposes sandbox filesystem operations.
+	FS *FileSystem
+	// Docker exposes Docker-in-Docker helpers. The sandbox must be created with
+	// DockerEnabled and an image that includes Docker, for example
+	// NewImage(...).WithDocker().
+	Docker *Docker
 }
 
+// SandboxStatus is the current sandbox process status returned by the gateway.
 type SandboxStatus struct {
 	Status   string
 	ExitCode int
 }
 
+// NetworkPermissions controls outbound network access for a sandbox.
 type NetworkPermissions struct {
 	BlockNetwork bool
 	AllowList    []string
 }
 
+// CreateSandbox creates a new sandbox from the supplied configuration.
 func (c *Client) CreateSandbox(ctx context.Context, config SandboxConfig) (*Sandbox, error) {
 	req, err := c.prepareSandboxStub(ctx, config)
 	if err != nil {
@@ -72,6 +89,7 @@ func (c *Client) CreateSandbox(ctx context.Context, config SandboxConfig) (*Sand
 	return newSandbox(c, create.GetContainerId(), stub.GetStubId()), nil
 }
 
+// ConnectSandbox reconnects to an existing sandbox by container ID.
 func (c *Client) ConnectSandbox(ctx context.Context, containerID string) (*Sandbox, error) {
 	if containerID == "" {
 		return nil, sdkError(ErrValidation, "connect sandbox", "container ID is required", nil)
@@ -86,6 +104,8 @@ func (c *Client) ConnectSandbox(ctx context.Context, containerID string) (*Sandb
 	return newSandbox(c, containerID, res.GetStubId()), nil
 }
 
+// CreateSandboxFromMemorySnapshot restores a sandbox from a checkpoint ID
+// returned by Sandbox.SnapshotMemory.
 func (c *Client) CreateSandboxFromMemorySnapshot(ctx context.Context, checkpointID string) (*Sandbox, error) {
 	if checkpointID == "" {
 		return nil, sdkError(ErrValidation, "create sandbox from snapshot", "checkpoint ID is required", nil)
@@ -107,6 +127,7 @@ func newSandbox(c *Client, containerID, stubID string) *Sandbox {
 	return s
 }
 
+// SandboxID returns the sandbox container ID.
 func (s *Sandbox) SandboxID() string {
 	if s == nil {
 		return ""
@@ -114,6 +135,7 @@ func (s *Sandbox) SandboxID() string {
 	return s.containerID
 }
 
+// StubID returns the Beam stub ID backing this sandbox.
 func (s *Sandbox) StubID() string {
 	if s == nil {
 		return ""
@@ -121,6 +143,7 @@ func (s *Sandbox) StubID() string {
 	return s.stubID
 }
 
+// Terminate stops the sandbox and releases worker resources.
 func (s *Sandbox) Terminate(ctx context.Context) error {
 	res, err := s.client.gateway.StopContainer(ctx, &pb.StopContainerRequest{ContainerId: s.containerID})
 	if err != nil {
@@ -132,6 +155,7 @@ func (s *Sandbox) Terminate(ctx context.Context) error {
 	return nil
 }
 
+// Status returns the current sandbox status.
 func (s *Sandbox) Status(ctx context.Context) (SandboxStatus, error) {
 	res, err := s.client.pod.SandboxStatus(ctx, &pb.PodSandboxStatusRequest{ContainerId: s.containerID})
 	if err != nil {
@@ -143,6 +167,7 @@ func (s *Sandbox) Status(ctx context.Context) (SandboxStatus, error) {
 	return SandboxStatus{Status: res.GetStatus(), ExitCode: int(res.GetExitCode())}, nil
 }
 
+// WaitReady blocks until the sandbox reports a running status or ctx is done.
 func (s *Sandbox) WaitReady(ctx context.Context) error {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
@@ -171,6 +196,8 @@ func (s *Sandbox) WaitReady(ctx context.Context) error {
 	}
 }
 
+// UpdateTTL changes how long the sandbox should stay alive. A negative duration
+// requests no automatic timeout.
 func (s *Sandbox) UpdateTTL(ctx context.Context, ttl time.Duration) error {
 	seconds := int32(ttl.Seconds())
 	if ttl < 0 {
@@ -189,6 +216,7 @@ func (s *Sandbox) UpdateTTL(ctx context.Context, ttl time.Duration) error {
 	return nil
 }
 
+// ExposePort exposes a sandbox port and returns its public URL.
 func (s *Sandbox) ExposePort(ctx context.Context, port int) (string, error) {
 	res, err := s.client.pod.SandboxExposePort(ctx, &pb.PodSandboxExposePortRequest{
 		ContainerId: s.containerID,
@@ -201,9 +229,10 @@ func (s *Sandbox) ExposePort(ctx context.Context, port int) (string, error) {
 	if !res.GetOk() {
 		return "", sdkError(ErrSandboxConnection, "expose port", res.GetErrorMsg(), nil)
 	}
-	return res.GetUrl(), nil
+	return s.client.normalizeExposedURL(res.GetUrl()), nil
 }
 
+// ListURLs returns exposed sandbox URLs keyed by sandbox port.
 func (s *Sandbox) ListURLs(ctx context.Context) (map[int]string, error) {
 	res, err := s.client.pod.SandboxListUrls(ctx, &pb.PodSandboxListUrlsRequest{ContainerId: s.containerID})
 	if err != nil {
@@ -214,11 +243,55 @@ func (s *Sandbox) ListURLs(ctx context.Context) (map[int]string, error) {
 	}
 	out := make(map[int]string, len(res.GetUrls()))
 	for port, url := range res.GetUrls() {
-		out[int(port)] = url
+		out[int(port)] = s.client.normalizeExposedURL(url)
 	}
 	return out, nil
 }
 
+func (c *Client) normalizeExposedURL(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Host == "" {
+		return rawURL
+	}
+	if !isLocalExposedURLHost(parsed.Hostname()) {
+		return rawURL
+	}
+
+	cfg := c.Config()
+	if !isLocalExposedURLHost(cfg.GatewayHost) {
+		return rawURL
+	}
+
+	host := normalizeLocalExposedURLHost(cfg.GatewayHost)
+	if port := parsed.Port(); port != "" {
+		parsed.Host = net.JoinHostPort(host, port)
+	} else {
+		parsed.Host = host
+	}
+	return parsed.String()
+}
+
+func isLocalExposedURLHost(host string) bool {
+	host = strings.Trim(strings.ToLower(strings.TrimSpace(host)), "[]")
+	switch host {
+	case "localhost", "0.0.0.0", "::", "::1":
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func normalizeLocalExposedURLHost(host string) string {
+	host = strings.Trim(strings.TrimSpace(host), "[]")
+	switch strings.ToLower(host) {
+	case "", "0.0.0.0", "::", "localhost":
+		return "127.0.0.1"
+	default:
+		return host
+	}
+}
+
+// UpdateNetworkPermissions replaces outbound network restrictions at runtime.
 func (s *Sandbox) UpdateNetworkPermissions(ctx context.Context, permissions NetworkPermissions) error {
 	if permissions.BlockNetwork && len(permissions.AllowList) > 0 {
 		return sdkError(ErrValidation, "update network permissions", "block network and allow list cannot both be set", nil)
@@ -238,6 +311,7 @@ func (s *Sandbox) UpdateNetworkPermissions(ctx context.Context, permissions Netw
 	return nil
 }
 
+// SnapshotMemory checkpoints the sandbox's memory and filesystem state.
 func (s *Sandbox) SnapshotMemory(ctx context.Context) (string, error) {
 	res, err := s.client.pod.SandboxSnapshotMemory(ctx, &pb.PodSandboxSnapshotMemoryRequest{
 		ContainerId: s.containerID,
@@ -255,6 +329,7 @@ func (s *Sandbox) SnapshotMemory(ctx context.Context) (string, error) {
 	return res.GetCheckpointId(), nil
 }
 
+// CreateImageFromFilesystem creates a reusable image from the sandbox filesystem.
 func (s *Sandbox) CreateImageFromFilesystem(ctx context.Context) (string, error) {
 	res, err := s.client.pod.SandboxCreateImageFromFilesystem(ctx, &pb.PodSandboxCreateImageFromFilesystemRequest{
 		ContainerId: s.containerID,

@@ -296,6 +296,42 @@ print(p.read_text().strip())
 	}
 }
 
+func TestIntegrationProcessLogStreaming(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	client := newIntegrationClient(t, ctx)
+	defer client.Close()
+
+	baseImageID := integrationBaseImageID(ctx, t, client)
+	sb, err := client.CreateSandbox(ctx, integrationSandboxConfig(SandboxConfig{
+		Name:      "go-sdk-log-streaming",
+		App:       "go-sdk-local-integration",
+		Image:     ImageFromID(baseImageID),
+		CPU:       1,
+		MemoryMiB: 256,
+		KeepWarm:  5 * time.Minute,
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sb.Terminate(context.Background())
+	if err := sb.WaitReady(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	script := `printf 'stdout-stream-start\n'; sleep 3; printf 'stderr-stream-middle\n' >&2; sleep 1; printf 'stdout-stream-end\n'; printf 'stderr-stream-end\n' >&2`
+	proc, err := sb.Exec(ctx, []string{"sh", "-lc", script}, ExecOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	capture := requireProcessStream(ctx, t, proc, 2*time.Second)
+	requireContainsAll(t, "stdout", capture.stdout, "stdout-stream-start", "stdout-stream-end")
+	requireContainsAll(t, "stderr", capture.stderr, "stderr-stream-middle", "stderr-stream-end")
+	requireReadersConsumed(ctx, t, proc)
+}
+
 func TestIntegrationSandboxLifecycle(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
@@ -348,6 +384,28 @@ func TestIntegrationSandboxLifecycle(t *testing.T) {
 	}
 
 	sb := sandboxes[0]
+	requireSandboxStatus(ctx, t, sb)
+
+	connected, err := client.ConnectSandbox(ctx, sb.SandboxID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireSandboxStatus(ctx, t, connected)
+
+	shellProc, err := connected.ExecShell(ctx, `sh -lc 'printf "%s:%s" "$GO_SDK_EXEC_SHELL" "$PWD"'`, ExecOptions{
+		Workdir: "/workspace",
+		Env:     map[string]string{"GO_SDK_EXEC_SHELL": "exec-shell-ok"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireProcessContains(ctx, t, shellProc, "exec-shell-ok:/workspace")
+
+	readerProc, err := sb.Exec(ctx, []string{"sh", "-lc", "printf stdout-reader-ok; printf stderr-reader-ok >&2"}, ExecOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireProcessReaders(ctx, t, readerProc, "stdout-reader-ok", "stderr-reader-ok")
 
 	var streamed strings.Builder
 	proc, err := sb.Exec(ctx, []string{"sh", "-lc", "echo stdout && echo stderr >&2"}, ExecOptions{})
@@ -393,6 +451,7 @@ func TestIntegrationSandboxLifecycle(t *testing.T) {
 	if string(data) != "hello beam" {
 		t.Fatalf("unexpected download: %q", data)
 	}
+	requireLocalFileRoundTrip(ctx, t, sb, "/workspace/go-sdk/uploaded.txt", "upload-file-ok")
 	if err := sb.FS.Replace(ctx, "/workspace/go-sdk", "beam", "sandbox"); err != nil {
 		t.Fatal(err)
 	}
@@ -403,8 +462,17 @@ func TestIntegrationSandboxLifecycle(t *testing.T) {
 	if len(results) == 0 {
 		t.Fatal("expected find result")
 	}
+	if err := sb.FS.RemoveFile(ctx, "/workspace/go-sdk/uploaded.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if err := sb.FS.Mkdir(ctx, "/workspace/go-sdk/remove-me", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := sb.FS.RemoveDir(ctx, "/workspace/go-sdk/remove-me"); err != nil {
+		t.Fatal(err)
+	}
 
-	server, err := sb.Exec(ctx, []string{"python3", "-m", "http.server", "8080", "--directory", "/workspace/go-sdk"}, ExecOptions{})
+	server, err := sb.Exec(ctx, []string{"python3", "-m", "http.server", "8080", "--bind", "::", "--directory", "/workspace/go-sdk"}, ExecOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -421,6 +489,17 @@ func TestIntegrationSandboxLifecycle(t *testing.T) {
 		t.Fatalf("expected listed URL for 8080, got %#v", urls)
 	}
 	waitSandboxURLContains(ctx, t, client, url+"/file.txt", "hello sandbox")
+
+	ipv4Server, err := sb.Exec(ctx, []string{"python3", "-m", "http.server", "8081", "--bind", "0.0.0.0", "--directory", "/workspace/go-sdk"}, ExecOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ipv4Server.Kill(context.Background())
+	ipv4URL, err := sb.ExposePort(ctx, 8081)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitSandboxURLContains(ctx, t, client, ipv4URL+"/file.txt", "hello sandbox")
 
 	if err := sb.UpdateTTL(ctx, 20*time.Minute); err != nil {
 		t.Fatal(err)
@@ -457,6 +536,79 @@ func TestIntegrationSandboxLifecycle(t *testing.T) {
 	defer fromImage.Terminate(context.Background())
 }
 
+func TestIntegrationASGIListenerFamilies(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+
+	client := newIntegrationClient(t, ctx)
+	defer client.Close()
+
+	sb, err := client.CreateSandbox(ctx, integrationSandboxConfig(SandboxConfig{
+		Name: "go-sdk-asgi-listeners",
+		App:  "go-sdk-local-integration",
+		Image: NewImage(
+			WithPythonVersion("python3.11"),
+			WithPythonPackages("uvicorn"),
+		),
+		CPU:       1,
+		MemoryMiB: 512,
+		Ports:     []int{8090, 8091},
+		KeepWarm:  10 * time.Minute,
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sb.Terminate(context.Background())
+	if err := sb.WaitReady(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	app := `import os
+
+async def app(scope, receive, send):
+    body = f"asgi-ok host={os.environ.get('BEAM_ASGI_HOST', '')}".encode()
+    await send({
+        "type": "http.response.start",
+        "status": 200,
+        "headers": [(b"content-type", b"text/plain")],
+    })
+    await send({"type": "http.response.body", "body": body})
+`
+	if err := sb.FS.Upload(ctx, "/workspace/asgi_app.py", []byte(app), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	ipv4Server, err := sb.Exec(ctx, []string{"python3", "-m", "uvicorn", "asgi_app:app", "--host", "0.0.0.0", "--port", "8090"}, ExecOptions{
+		Workdir: "/workspace",
+		Env:     map[string]string{"BEAM_ASGI_HOST": "0.0.0.0"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ipv4Server.Kill(context.Background())
+
+	ipv6Server, err := sb.Exec(ctx, []string{"python3", "-m", "uvicorn", "asgi_app:app", "--host", "::", "--port", "8091"}, ExecOptions{
+		Workdir: "/workspace",
+		Env:     map[string]string{"BEAM_ASGI_HOST": "::"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ipv6Server.Kill(context.Background())
+
+	ipv4URL, err := sb.ExposePort(ctx, 8090)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitSandboxURLContains(ctx, t, client, ipv4URL, "asgi-ok", "0.0.0.0")
+
+	ipv6URL, err := sb.ExposePort(ctx, 8091)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitSandboxURLContains(ctx, t, client, ipv6URL, "asgi-ok", "::")
+}
+
 func requireListProcesses(ctx context.Context, t *testing.T, sandbox *Sandbox) []ProcessInfo {
 	t.Helper()
 	var lastErr error
@@ -479,6 +631,41 @@ func requireListProcesses(ctx context.Context, t *testing.T, sandbox *Sandbox) [
 			t.Fatalf("list processes for %s: %v", sandbox.SandboxID(), lastErr)
 		case <-ticker.C:
 		}
+	}
+}
+
+func requireSandboxStatus(ctx context.Context, t *testing.T, sandbox *Sandbox) SandboxStatus {
+	t.Helper()
+	status, err := sandbox.Status(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.Status == "" {
+		t.Fatalf("expected sandbox status, got %#v", status)
+	}
+	return status
+}
+
+func requireLocalFileRoundTrip(ctx context.Context, t *testing.T, sandbox *Sandbox, sandboxPath, payload string) {
+	t.Helper()
+	localUpload := filepath.Join(t.TempDir(), "upload.txt")
+	if err := os.WriteFile(localUpload, []byte(payload), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := sandbox.FS.UploadFile(ctx, localUpload, sandboxPath); err != nil {
+		t.Fatal(err)
+	}
+
+	localDownload := filepath.Join(t.TempDir(), "downloaded.txt")
+	if err := sandbox.FS.DownloadFile(ctx, sandboxPath, localDownload); err != nil {
+		t.Fatal(err)
+	}
+	downloaded, err := os.ReadFile(localDownload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(downloaded) != payload {
+		t.Fatalf("unexpected downloaded file contents: %q", downloaded)
 	}
 }
 
@@ -763,6 +950,7 @@ func TestIntegrationDockerWorkspaceAndVolumeVisibility(t *testing.T) {
 	serverScript := fmt.Sprintf(`
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
+import socket
 
 workspace_payload = Path("/mnt/code/app/payload.txt").read_text()
 volume_payload = Path(%q).read_text()
@@ -784,8 +972,18 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass
 
-HTTPServer.allow_reuse_address = True
-HTTPServer(("0.0.0.0", %d), Handler).serve_forever()
+class DualStackHTTPServer(HTTPServer):
+    address_family = socket.AF_INET6
+    allow_reuse_address = True
+
+    def server_bind(self):
+        try:
+            self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+        except OSError:
+            pass
+        super().server_bind()
+
+DualStackHTTPServer(("::", %d), Handler).serve_forever()
 `, mountPath+"/payload.txt", visiblePort)
 	server, err := sb.Exec(ctx, []string{"python3", "-c", serverScript}, ExecOptions{Workdir: "/workspace"})
 	if err != nil {
@@ -813,8 +1011,12 @@ func TestIntegrationDockerSmoke(t *testing.T) {
 	runtimeName := integrationRuntimeName()
 	suffix := fmt.Sprintf("%s-%d", runtimeName, time.Now().UnixNano())
 	logContainer := "beam-go-docker-log-" + suffix
-	composeContainer := "beam-go-docker-compose-" + suffix
-	const composePort = 8781
+	composeContainer4 := "beam-go-docker-compose-v4-" + suffix
+	composeContainer6 := "beam-go-docker-compose-v6-" + suffix
+	const (
+		composePort4 = 8781
+		composePort6 = 8782
+	)
 	imageTag := "beam-go-docker-built:" + suffix
 	buildDir := "/workspace/docker-build-" + suffix
 	composeDir := "/workspace/docker-compose-" + suffix
@@ -936,14 +1138,57 @@ func TestIntegrationDockerSmoke(t *testing.T) {
 	if err := sb.FS.Upload(ctx, composeDir+"/site/index.txt", []byte(composePayload+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	composeServer := fmt.Sprintf(`
+from http.server import HTTPServer, SimpleHTTPRequestHandler
+import os
+import socket
+
+host = os.environ["BEAM_TEST_HOST"]
+port = int(os.environ["BEAM_TEST_PORT"])
+label = os.environ["BEAM_TEST_LABEL"]
+family = socket.AF_INET6 if ":" in host else socket.AF_INET
+
+class SandboxHTTPServer(HTTPServer):
+    address_family = family
+    allow_reuse_address = True
+
+    def server_bind(self):
+        if self.address_family == socket.AF_INET6:
+            try:
+                self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+            except OSError:
+                pass
+        super().server_bind()
+
+os.chdir("/site")
+print(f"compose-http-ready-{label}", flush=True)
+SandboxHTTPServer((host, port), SimpleHTTPRequestHandler).serve_forever()
+`)
+	if err := sb.FS.Upload(ctx, composeDir+"/site/server.py", []byte(composeServer), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	composeFile := fmt.Sprintf(`services:
-  app:
-    image: busybox:1.36
+  app4:
+    image: python:3.11-alpine
     container_name: %s
     volumes:
       - "%s/site:/site:ro"
-    command: sh -c "echo compose-http-ready; exec httpd -f -p %d -h /site"
-`, composeContainer, composeDir, composePort)
+    environment:
+      BEAM_TEST_HOST: "0.0.0.0"
+      BEAM_TEST_PORT: "%d"
+      BEAM_TEST_LABEL: "v4"
+    command: python3 /site/server.py
+  app6:
+    image: python:3.11-alpine
+    container_name: %s
+    volumes:
+      - "%s/site:/site:ro"
+    environment:
+      BEAM_TEST_HOST: "::"
+      BEAM_TEST_PORT: "%d"
+      BEAM_TEST_LABEL: "v6"
+    command: python3 /site/server.py
+`, composeContainer4, composeDir, composePort4, composeContainer6, composeDir, composePort6)
 	if err := sb.FS.Upload(ctx, composeDir+"/compose.yml", []byte(composeFile), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -956,20 +1201,41 @@ func TestIntegrationDockerSmoke(t *testing.T) {
 
 	composeLogs := requireProcessContainsEventually(ctx, t, func() (*Process, error) {
 		return sb.Docker.ComposeLogs(ctx, "compose.yml", false, composeDir)
-	}, "compose-http-ready")
+	}, "compose-http-ready-v4")
+	composeLogs = requireProcessContainsEventually(ctx, t, func() (*Process, error) {
+		return sb.Docker.ComposeLogs(ctx, "compose.yml", false, composeDir)
+	}, "compose-http-ready-v6")
 	t.Logf("docker compose logs output: %s", strings.TrimSpace(composeLogs.Stdout+composeLogs.Stderr))
 
-	composeURL, err := sb.ExposePort(ctx, composePort)
+	directCompose4, err := sb.Exec(ctx, []string{"python3", "-c", fmt.Sprintf("import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:%d/index.txt', timeout=5).read().decode())", composePort4)}, ExecOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	waitSandboxURLContains(ctx, t, client, composeURL+"/index.txt", composePayload)
+	requireProcessContains(ctx, t, directCompose4, composePayload)
+
+	directCompose6, err := sb.Exec(ctx, []string{"python3", "-c", fmt.Sprintf("import urllib.request; print(urllib.request.urlopen('http://[::1]:%d/index.txt', timeout=5).read().decode())", composePort6)}, ExecOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireProcessContains(ctx, t, directCompose6, composePayload)
+
+	composeURL4, err := sb.ExposePort(ctx, composePort4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitSandboxURLContains(ctx, t, client, composeURL4+"/index.txt", composePayload)
+
+	composeURL6, err := sb.ExposePort(ctx, composePort6)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitSandboxURLContains(ctx, t, client, composeURL6+"/index.txt", composePayload)
 
 	composePs, err := sb.Docker.Compose(ctx, "-f", composeDir+"/compose.yml", "ps", "--all")
 	if err != nil {
 		t.Fatal(err)
 	}
-	requireProcessContains(ctx, t, composePs, composeContainer)
+	requireProcessContains(ctx, t, composePs, composeContainer4, composeContainer6)
 
 	composeDown, err := sb.Docker.ComposeDown(ctx, "compose.yml", true, composeDir)
 	if err != nil {
@@ -988,6 +1254,57 @@ func integrationRuntimeName() string {
 	return "default"
 }
 
+type processStreamCapture struct {
+	stdout  string
+	stderr  string
+	entries []LogEntry
+	firstAt time.Duration
+}
+
+func requireProcessStream(ctx context.Context, t *testing.T, proc *Process, firstChunkBy time.Duration) processStreamCapture {
+	t.Helper()
+	start := time.Now()
+	var stdout, stderr strings.Builder
+	capture := processStreamCapture{}
+
+	exit, err := proc.Stream(ctx, func(entry LogEntry) {
+		if capture.firstAt == 0 {
+			capture.firstAt = time.Since(start)
+		}
+		capture.entries = append(capture.entries, entry)
+		switch entry.Stream {
+		case "stdout":
+			stdout.WriteString(entry.Data)
+		case "stderr":
+			stderr.WriteString(entry.Data)
+		default:
+			t.Fatalf("unexpected stream name %q", entry.Stream)
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exit != 0 {
+		t.Fatalf("unexpected stream exit=%d entries=%#v", exit, capture.entries)
+	}
+	if capture.firstAt == 0 || capture.firstAt > firstChunkBy {
+		t.Fatalf("first log chunk was not streamed live, first_at=%s entries=%#v", capture.firstAt, capture.entries)
+	}
+
+	capture.stdout = stdout.String()
+	capture.stderr = stderr.String()
+	return capture
+}
+
+func requireContainsAll(t *testing.T, name, value string, needles ...string) {
+	t.Helper()
+	for _, needle := range needles {
+		if !strings.Contains(value, needle) {
+			t.Fatalf("%s missing %q: %q", name, needle, value)
+		}
+	}
+}
+
 func requireProcessSuccess(ctx context.Context, t *testing.T, proc *Process) *ProcessResult {
 	t.Helper()
 	result, err := proc.Output(ctx)
@@ -998,6 +1315,35 @@ func requireProcessSuccess(ctx context.Context, t *testing.T, proc *Process) *Pr
 		t.Fatalf("process failed exit=%d stdout=%q stderr=%q", result.ExitCode, result.Stdout, result.Stderr)
 	}
 	return result
+}
+
+func requireProcessReaders(ctx context.Context, t *testing.T, proc *Process, wantStdout, wantStderr string) {
+	t.Helper()
+	if exit, err := proc.Wait(ctx); err != nil || exit != 0 {
+		t.Fatalf("reader process wait exit=%d err=%v", exit, err)
+	}
+	stdout, err := proc.Stdout.Read(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stderr, err := proc.Stderr.Read(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stdout != wantStdout || stderr != wantStderr {
+		t.Fatalf("unexpected direct reader output stdout=%q stderr=%q", stdout, stderr)
+	}
+	requireReadersConsumed(ctx, t, proc)
+}
+
+func requireReadersConsumed(ctx context.Context, t *testing.T, proc *Process) {
+	t.Helper()
+	if stdout, err := proc.Stdout.Read(ctx); err != nil || stdout != "" {
+		t.Fatalf("stdout reader should be empty, got %q err=%v", stdout, err)
+	}
+	if stderr, err := proc.Stderr.Read(ctx); err != nil || stderr != "" {
+		t.Fatalf("stderr reader should be empty, got %q err=%v", stderr, err)
+	}
 }
 
 func requireProcessContains(ctx context.Context, t *testing.T, proc *Process, values ...string) *ProcessResult {
@@ -1104,6 +1450,7 @@ func TestIntegrationSandboxMemorySnapshot(t *testing.T) {
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 import os
+import socket
 
 token = %q
 state = {"count": 0}
@@ -1138,14 +1485,31 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass
 
-HTTPServer.allow_reuse_address = True
-HTTPServer(("0.0.0.0", %d), Handler).serve_forever()
+class DualStackHTTPServer(HTTPServer):
+    address_family = socket.AF_INET6
+    allow_reuse_address = True
+
+    def server_bind(self):
+        try:
+            self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+        except OSError:
+            pass
+        super().server_bind()
+
+DualStackHTTPServer(("::", %d), Handler).serve_forever()
 `, token, snapshotPort)
 	server, err := sb.Exec(ctx, []string{"python3", "-c", serverScript}, ExecOptions{Workdir: "/workspace"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer server.Kill(context.Background())
+	requireProcessContainsEventually(ctx, t, func() (*Process, error) {
+		return sb.Exec(ctx, []string{
+			"python3",
+			"-c",
+			fmt.Sprintf("import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:%d/health', timeout=3).read().decode())", snapshotPort),
+		}, ExecOptions{Workdir: "/workspace"})
+	}, token)
 
 	url, err := sb.ExposePort(ctx, snapshotPort)
 	if err != nil {

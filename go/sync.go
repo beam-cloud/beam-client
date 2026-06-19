@@ -35,6 +35,7 @@ var defaultIgnorePatterns = []string{
 	"build/",
 }
 
+// FileSyncer creates deterministic workspace archives and uploads them to Beam.
 type FileSyncer struct {
 	Root           string
 	IgnoreFile     string
@@ -42,8 +43,10 @@ type FileSyncer struct {
 	CreateIgnore   bool
 }
 
+// FileSyncOption configures a FileSyncer.
 type FileSyncOption func(*FileSyncer)
 
+// NewFileSyncer creates a syncer rooted at root.
 func NewFileSyncer(root string, opts ...FileSyncOption) *FileSyncer {
 	s := &FileSyncer{
 		Root:         root,
@@ -56,24 +59,28 @@ func NewFileSyncer(root string, opts ...FileSyncOption) *FileSyncer {
 	return s
 }
 
+// WithIgnoreFile sets the ignore file name. The default is ".beamignore".
 func WithIgnoreFile(name string) FileSyncOption {
 	return func(s *FileSyncer) {
 		s.IgnoreFile = name
 	}
 }
 
+// WithIgnorePatterns appends ignore patterns.
 func WithIgnorePatterns(patterns ...string) FileSyncOption {
 	return func(s *FileSyncer) {
 		s.IgnorePatterns = append(s.IgnorePatterns, patterns...)
 	}
 }
 
+// WithoutDefaultIgnoreFile disables loading the default ignore file.
 func WithoutDefaultIgnoreFile() FileSyncOption {
 	return func(s *FileSyncer) {
 		s.CreateIgnore = false
 	}
 }
 
+// FileSyncResult describes an uploaded or cached workspace archive.
 type FileSyncResult struct {
 	ObjectID string
 	Hash     string
@@ -82,6 +89,8 @@ type FileSyncResult struct {
 	Cached   bool
 }
 
+// Sync archives and uploads the sync root, reusing an existing object when the
+// content hash already exists.
 func (s *FileSyncer) Sync(ctx context.Context, c *Client) (FileSyncResult, error) {
 	archive, hash, files, err := s.Archive()
 	if err != nil {
@@ -176,6 +185,7 @@ func (s *FileSyncer) putObjectStream(ctx context.Context, c *Client, archive []b
 	return FileSyncResult{ObjectID: put.GetObjectId(), Hash: hash, Size: size, Files: files}, nil
 }
 
+// Archive returns a deterministic zip archive, its hash, and included files.
 func (s *FileSyncer) Archive() ([]byte, string, []string, error) {
 	root := s.Root
 	if root == "" {
@@ -241,7 +251,7 @@ func (s *FileSyncer) Archive() ([]byte, string, []string, error) {
 		}
 		header.Name = rel
 		header.Method = zip.Deflate
-		header.SetModTime(deterministicZipTime)
+		header.Modified = deterministicZipTime
 		w, err := zw.CreateHeader(header)
 		if err != nil {
 			zw.Close()
@@ -331,9 +341,7 @@ func ignorePatternMatches(rel string, isDir bool, pattern string) bool {
 	if dirOnly {
 		return isDir && (rel == pattern || strings.HasPrefix(rel, pattern+"/") || strings.HasPrefix(rel, path.Base(pattern)+"/"))
 	}
-	if strings.HasPrefix(pattern, "/") {
-		pattern = strings.TrimPrefix(pattern, "/")
-	}
+	pattern = strings.TrimPrefix(pattern, "/")
 	if ok, _ := path.Match(pattern, rel); ok {
 		return true
 	}

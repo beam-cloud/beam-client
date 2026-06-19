@@ -16,10 +16,15 @@ const (
 	dockerReadyPoll    = 500 * time.Millisecond
 )
 
+// Docker exposes Docker-in-Docker commands for a sandbox.
 type Docker struct {
 	sandbox *Sandbox
 }
 
+// DockerRunOptions configures Docker.Run.
+//
+// Network defaults to "host" and PID defaults to "host" so inner containers
+// work under both runc and gVisor sandbox runtimes.
 type DockerRunOptions struct {
 	Detach     bool
 	Remove     bool
@@ -36,6 +41,7 @@ type DockerRunOptions struct {
 	Workdir    string
 }
 
+// DockerBuildOptions configures Docker.Build.
 type DockerBuildOptions struct {
 	Tag     string
 	File    string
@@ -45,6 +51,10 @@ type DockerBuildOptions struct {
 	Workdir string
 }
 
+// DockerComposeOptions configures Docker.ComposeUp.
+//
+// Compose services are automatically given a generated override file with host
+// networking and host PID mode for sandbox compatibility.
 type DockerComposeOptions struct {
 	File    string
 	Build   bool
@@ -60,6 +70,7 @@ type composeService struct {
 	Build json.RawMessage `json:"build"`
 }
 
+// Run starts a Docker container inside the sandbox.
 func (d *Docker) Run(ctx context.Context, image string, opts DockerRunOptions) (*Process, error) {
 	args := []string{"docker", "run"}
 	if opts.Detach {
@@ -106,10 +117,12 @@ func (d *Docker) Run(ctx context.Context, image string, opts DockerRunOptions) (
 	return d.exec(ctx, args, ExecOptions{Workdir: opts.Workdir})
 }
 
+// Pull pulls a Docker image inside the sandbox.
 func (d *Docker) Pull(ctx context.Context, image string) (*Process, error) {
 	return d.exec(ctx, []string{"docker", "pull", image}, ExecOptions{})
 }
 
+// Build builds a Docker image inside the sandbox.
 func (d *Docker) Build(ctx context.Context, contextPath string, opts DockerBuildOptions) (*Process, error) {
 	if contextPath == "" {
 		contextPath = "."
@@ -138,6 +151,7 @@ func (d *Docker) Build(ctx context.Context, contextPath string, opts DockerBuild
 	return d.exec(ctx, args, ExecOptions{Workdir: opts.Workdir})
 }
 
+// Ps lists Docker containers.
 func (d *Docker) Ps(ctx context.Context, all bool) (*Process, error) {
 	args := []string{"docker", "ps"}
 	if all {
@@ -146,6 +160,7 @@ func (d *Docker) Ps(ctx context.Context, all bool) (*Process, error) {
 	return d.exec(ctx, args, ExecOptions{})
 }
 
+// Logs returns docker logs for a container.
 func (d *Docker) Logs(ctx context.Context, container string, follow bool) (*Process, error) {
 	args := []string{"docker", "logs"}
 	if follow {
@@ -155,6 +170,7 @@ func (d *Docker) Logs(ctx context.Context, container string, follow bool) (*Proc
 	return d.exec(ctx, args, ExecOptions{})
 }
 
+// Exec runs a command in a Docker container.
 func (d *Docker) Exec(ctx context.Context, container string, argv ...string) (*Process, error) {
 	if container == "" {
 		return nil, sdkError(ErrValidation, "docker exec", "container is required", nil)
@@ -163,6 +179,7 @@ func (d *Docker) Exec(ctx context.Context, container string, argv ...string) (*P
 	return d.exec(ctx, args, ExecOptions{})
 }
 
+// ComposeUp runs docker compose up with sandbox-compatible overrides.
 func (d *Docker) ComposeUp(ctx context.Context, opts DockerComposeOptions) (*Process, error) {
 	args := []string{"docker", "compose"}
 	files, err := d.composeFiles(ctx, opts.File, opts.Workdir)
@@ -182,6 +199,7 @@ func (d *Docker) ComposeUp(ctx context.Context, opts DockerComposeOptions) (*Pro
 	return d.exec(ctx, args, ExecOptions{Workdir: opts.Workdir})
 }
 
+// ComposeDown runs docker compose down.
 func (d *Docker) ComposeDown(ctx context.Context, file string, volumes bool, workdir string) (*Process, error) {
 	args := []string{"docker", "compose"}
 	files, err := d.composeFiles(ctx, file, workdir)
@@ -198,6 +216,7 @@ func (d *Docker) ComposeDown(ctx context.Context, file string, volumes bool, wor
 	return d.exec(ctx, args, ExecOptions{Workdir: workdir})
 }
 
+// ComposeLogs returns docker compose logs.
 func (d *Docker) ComposeLogs(ctx context.Context, file string, follow bool, workdir string) (*Process, error) {
 	args := []string{"docker", "compose"}
 	files, err := d.composeFiles(ctx, file, workdir)
@@ -214,6 +233,7 @@ func (d *Docker) ComposeLogs(ctx context.Context, file string, follow bool, work
 	return d.exec(ctx, args, ExecOptions{Workdir: workdir})
 }
 
+// Raw runs an arbitrary docker command. The leading "docker" is optional.
 func (d *Docker) Raw(ctx context.Context, args ...string) (*Process, error) {
 	if len(args) == 0 {
 		return nil, sdkError(ErrValidation, "docker", "docker arguments are required", nil)
@@ -224,6 +244,7 @@ func (d *Docker) Raw(ctx context.Context, args ...string) (*Process, error) {
 	return d.exec(ctx, append([]string{"docker"}, args...), ExecOptions{})
 }
 
+// Compose runs an arbitrary docker compose command.
 func (d *Docker) Compose(ctx context.Context, args ...string) (*Process, error) {
 	if len(args) == 0 {
 		return nil, sdkError(ErrValidation, "docker compose", "compose arguments are required", nil)
@@ -340,6 +361,7 @@ func parseComposeConfig(raw string) ([]string, map[string]bool, error) {
 	return services, buildServices, nil
 }
 
+// WaitReady waits until the sandbox Docker daemon accepts docker info.
 func (d *Docker) WaitReady(ctx context.Context) error {
 	if d == nil || d.sandbox == nil {
 		return sdkError(ErrValidation, "docker wait ready", "sandbox is nil", nil)

@@ -11,6 +11,7 @@ import (
 	pb "github.com/beam-cloud/beta9/proto"
 )
 
+// Image describes the image used to run a sandbox.
 type Image struct {
 	id                 string
 	pythonVersion      string
@@ -29,19 +30,24 @@ type Image struct {
 	buildLogSink       func(ImageBuildLog)
 }
 
+// ImageOption configures an Image.
 type ImageOption func(*Image)
 
+// ImageBuildLog is one message from an image build stream.
 type ImageBuildLog struct {
 	Message string
 	Warning bool
 }
 
+// ImageBuildResult describes a resolved Beam image.
 type ImageBuildResult struct {
 	ImageID       string
 	PythonVersion string
 	Cached        bool
 }
 
+// NewImage creates a managed Beam image. The default Python version is
+// "python3" unless overridden.
 func NewImage(opts ...ImageOption) *Image {
 	img := &Image{pythonVersion: "python3"}
 	for _, opt := range opts {
@@ -50,15 +56,18 @@ func NewImage(opts ...ImageOption) *Image {
 	return img
 }
 
+// ImageFromRegistry uses an existing registry image URI as the base image.
 func ImageFromRegistry(uri string, opts ...ImageOption) *Image {
 	img := NewImage(append([]ImageOption{WithRegistry(uri)}, opts...)...)
 	return img
 }
 
+// ImageFromID uses an already-built Beam image ID.
 func ImageFromID(id string) *Image {
 	return &Image{id: id, pythonVersion: "python3"}
 }
 
+// ImageFromDockerfile reads a Dockerfile from disk and builds it as a Beam image.
 func ImageFromDockerfile(dockerfilePath string, opts ...ImageOption) (*Image, error) {
 	content, err := os.ReadFile(dockerfilePath)
 	if err != nil {
@@ -71,48 +80,56 @@ func ImageFromDockerfile(dockerfilePath string, opts ...ImageOption) (*Image, er
 	return img, nil
 }
 
+// WithPythonVersion sets the Python runtime version, for example "python3.11".
 func WithPythonVersion(version string) ImageOption {
 	return func(i *Image) {
 		i.pythonVersion = version
 	}
 }
 
+// WithPythonPackages installs Python packages into the image.
 func WithPythonPackages(packages ...string) ImageOption {
 	return func(i *Image) {
 		i.pythonPackages = append(i.pythonPackages, packages...)
 	}
 }
 
+// WithCommands appends shell commands to run while building the image.
 func WithCommands(commands ...string) ImageOption {
 	return func(i *Image) {
 		i.commands = append(i.commands, commands...)
 	}
 }
 
+// WithRegistry sets an existing registry image URI.
 func WithRegistry(uri string) ImageOption {
 	return func(i *Image) {
 		i.existingImageURI = uri
 	}
 }
 
+// WithBaseImageCredentials sets credentials for pulling the base image.
 func WithBaseImageCredentials(creds map[string]string) ImageOption {
 	return func(i *Image) {
 		i.existingImageCreds = copyStringMap(creds)
 	}
 }
 
+// WithEnv sets image build environment variables.
 func WithEnv(env map[string]string) ImageOption {
 	return func(i *Image) {
 		i.env = copyStringMap(env)
 	}
 }
 
+// WithSecrets makes named Beam secrets available to the image build.
 func WithSecrets(secrets ...string) ImageOption {
 	return func(i *Image) {
 		i.secrets = append(i.secrets, secrets...)
 	}
 }
 
+// WithDockerfile sets Dockerfile contents and its build context directory.
 func WithDockerfile(contents, contextDir string) ImageOption {
 	return func(i *Image) {
 		i.dockerfile = contents
@@ -123,36 +140,42 @@ func WithDockerfile(contents, contextDir string) ImageOption {
 	}
 }
 
+// WithBuildContextObject uses an already-uploaded build context object.
 func WithBuildContextObject(objectID string) ImageOption {
 	return func(i *Image) {
 		i.buildContextObject = objectID
 	}
 }
 
+// WithForceRebuild bypasses the image build cache when true.
 func WithForceRebuild(force bool) ImageOption {
 	return func(i *Image) {
 		i.forceRebuild = force
 	}
 }
 
+// WithBuildGPU requests a GPU for image build execution.
 func WithBuildGPU(gpu string) ImageOption {
 	return func(i *Image) {
 		i.gpu = gpu
 	}
 }
 
+// WithIgnorePython skips Beam's Python runtime injection for Dockerfile images.
 func WithIgnorePython(ignore bool) ImageOption {
 	return func(i *Image) {
 		i.ignorePython = ignore
 	}
 }
 
+// WithBuildLogSink streams image build logs to sink.
 func WithBuildLogSink(sink func(ImageBuildLog)) ImageOption {
 	return func(i *Image) {
 		i.buildLogSink = sink
 	}
 }
 
+// ID returns the resolved Beam image ID after Build or the existing ID.
 func (i *Image) ID() string {
 	if i == nil {
 		return ""
@@ -160,6 +183,7 @@ func (i *Image) ID() string {
 	return i.id
 }
 
+// PythonVersion returns the configured Python version.
 func (i *Image) PythonVersion() string {
 	if i == nil || i.pythonVersion == "" {
 		return "python3"
@@ -167,6 +191,7 @@ func (i *Image) PythonVersion() string {
 	return i.pythonVersion
 }
 
+// WithDocker installs Docker CLI, dockerd, buildx, and compose into the image.
 func (i *Image) WithDocker() *Image {
 	i.commands = append(i.commands,
 		"apt-get update && apt-get install -y ca-certificates curl gnupg",
@@ -179,6 +204,7 @@ func (i *Image) WithDocker() *Image {
 	return i
 }
 
+// Build resolves or builds the image and stores the resulting image ID.
 func (i *Image) Build(ctx context.Context, c *Client) (ImageBuildResult, error) {
 	if i == nil {
 		i = NewImage()

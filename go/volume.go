@@ -6,15 +6,18 @@ import (
 	pb "github.com/beam-cloud/beta9/proto"
 )
 
+// VolumeMount is implemented by Beam volume and cloud bucket mounts.
 type VolumeMount interface {
 	prepare(ctx context.Context, c *Client) (*pb.Volume, error)
 }
 
+// Volume is a persistent Beam volume mount.
 type Volume struct {
 	Name      string
 	MountPath string
 }
 
+// NewVolume returns a Beam volume mounted at mountPath.
 func NewVolume(name, mountPath string) Volume {
 	return Volume{Name: name, MountPath: mountPath}
 }
@@ -36,11 +39,13 @@ func (v Volume) prepare(ctx context.Context, c *Client) (*pb.Volume, error) {
 	return &pb.Volume{Id: res.GetVolume().GetId(), MountPath: v.MountPath}, nil
 }
 
+// CloudBucket is an external object-storage bucket mounted into a sandbox.
 type CloudBucket struct {
 	MountPath string
 	Config    CloudBucketConfig
 }
 
+// CloudBucketConfig configures an external object-storage bucket mount.
 type CloudBucketConfig struct {
 	BucketName     string
 	AccessKey      string
@@ -51,6 +56,7 @@ type CloudBucketConfig struct {
 	ForcePathStyle bool
 }
 
+// NewCloudBucket returns a cloud bucket mount.
 func NewCloudBucket(mountPath string, config CloudBucketConfig) CloudBucket {
 	return CloudBucket{MountPath: mountPath, Config: config}
 }
@@ -78,6 +84,7 @@ func (b CloudBucket) prepare(ctx context.Context, c *Client) (*pb.Volume, error)
 	}, nil
 }
 
+// PoolConfig selects or configures the worker pool used for a sandbox.
 type PoolConfig struct {
 	Name           string
 	GPU            []string

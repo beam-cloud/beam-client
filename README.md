@@ -121,9 +121,6 @@ Set `SandboxConfig.Name` to the app name that groups related sandboxes. Each
 created sandbox still has a generated container ID, available from
 `sandbox.SandboxID()`.
 
-`SandboxConfig.SyncLocalDir` is optional and defaults to false. Set it to true
-only when you want to upload `Workdir` into the sandbox code mount at `/mnt/code`.
-
 ```go
 ctx := context.Background()
 client, err := beam.NewClient(ctx)
@@ -142,6 +139,10 @@ if err != nil {
 defer sandbox.Terminate(context.Background())
 
 result, err := sandbox.RunCode(ctx, "print('hello from Beam')", beam.ExecOptions{})
+if err != nil {
+    return err
+}
+fmt.Print(result.Stdout)
 ```
 
 ### Processes And Logs
@@ -176,7 +177,6 @@ sandbox, err := client.CreateSandbox(ctx, beam.SandboxConfig{
     Name:          "docker-example",
     Image:         beam.NewImage(beam.WithPythonVersion("python3.11")).WithDocker(),
     DockerEnabled: true,
-    Pool:          &beam.PoolConfig{Name: "gvisor"},
 })
 if err != nil {
     return err
@@ -204,8 +204,7 @@ go run ./examples/basic
 go run ./examples/filesystem
 go run ./examples/http
 go run ./examples/snapshot
-go run ./examples/sync-local-dir
-BEAM_DOCKER_POOL=gvisor go run ./examples/docker
+go run ./examples/docker
 ```
 
 ## Releases

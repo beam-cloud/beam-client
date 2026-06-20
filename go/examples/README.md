@@ -1,20 +1,43 @@
 # Beam Go Sandbox Examples
 
-Set `BEAM_TOKEN` first. The SDK uses Beam production by default.
+Set `BEAM_TOKEN` and run a sandbox. The SDK uses Beam production by default.
 
 ```bash
 export BEAM_TOKEN=...
 ```
 
-Run any example with `go run`:
+```go
+ctx := context.Background()
+client, err := beam.NewClient(ctx)
+if err != nil {
+    return err
+}
+defer client.Close()
+
+sandbox, err := client.CreateSandbox(ctx, beam.SandboxConfig{
+    Name:  "example",
+    Image: beam.NewImage(beam.WithPythonVersion("python3.11")),
+})
+if err != nil {
+    return err
+}
+defer sandbox.Terminate(context.Background())
+
+result, err := sandbox.RunCode(ctx, `print("hello from Beam")`, beam.ExecOptions{})
+if err != nil {
+    return err
+}
+fmt.Print(result.Stdout)
+```
+
+Run the core examples with `go run`:
 
 ```bash
 go run ./examples/basic
 go run ./examples/filesystem
 go run ./examples/http
 go run ./examples/snapshot
-go run ./examples/sync-local-dir
-BEAM_DOCKER_POOL=gvisor go run ./examples/docker
+go run ./examples/docker
 ```
 
 Install the SDK from GitHub:
@@ -22,9 +45,6 @@ Install the SDK from GitHub:
 ```bash
 go get github.com/beam-cloud/beam-client/go@latest
 ```
-
-`SandboxConfig.SyncLocalDir` is optional and defaults to false. Only the
-`sync-local-dir` example opts into uploading a local directory to `/mnt/code`.
 
 The examples use `SandboxConfig.Name` as the app name that groups related
 sandboxes.
@@ -37,8 +57,14 @@ Notes:
   bearer token for local protected routes.
 - `snapshot` creates a memory snapshot and restores a new sandbox from it.
 - `docker` requires an image built with `Image.WithDocker()` and a sandbox
-  created with `DockerEnabled: true`; use `BEAM_DOCKER_POOL=gvisor` to force the
-  gVisor pool locally.
+  created with `DockerEnabled: true`.
+
+Additional development examples:
+
+```bash
+go run ./examples/sync-local-dir
+```
 
 Development note: to point examples at a local beta9 gateway, set
-`BEAM_GATEWAY_HOST=127.0.0.1` and `BEAM_GATEWAY_PORT=1993`.
+`BEAM_GATEWAY_HOST=127.0.0.1` and `BEAM_GATEWAY_PORT=1993`. To test Docker on a
+specific development pool, set `BEAM_DOCKER_POOL=<pool-name>`.

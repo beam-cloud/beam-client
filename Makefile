@@ -1,10 +1,12 @@
-.PHONY: test test-go test-go-integration test-go-integration-sync test-go-integration-snapshot test-go-integration-runc test-go-integration-gvisor test-go-integration-docker test-go-integration-docker-runc test-go-integration-docker-gvisor test-go-integration-volumes test-go-integration-volumes-runc test-go-integration-volumes-gvisor test-go-integration-runtime-matrix test-python publish-python tidy-go verify-go-install
+.PHONY: test test-go test-go-integration test-go-integration-sync test-go-integration-snapshot test-go-integration-runc test-go-integration-gvisor test-go-integration-docker test-go-integration-docker-runc test-go-integration-docker-gvisor test-go-integration-volumes test-go-integration-volumes-runc test-go-integration-volumes-gvisor test-go-integration-runtime-matrix test-python test-js build-js publish-python publish-js tidy-go verify-go-install
 
 RUNC_POOL_ENV = $${BEAM_TEST_RUNC_POOL:+BEAM_TEST_POOL=$$BEAM_TEST_RUNC_POOL}
 PYPI_REPOSITORY ?=
 PYTHON_PUBLISH_ARGS = $(if $(PYPI_REPOSITORY),--repository $(PYPI_REPOSITORY),)
+NPM_TAG ?= latest
+NPM_PUBLISH_ARGS = $(if $(filter $(NPM_TAG),latest),,--tag $(NPM_TAG))
 
-test: test-go test-python
+test: test-go test-python test-js
 
 test-go:
 	cd go && GOROOT= go test ./...
@@ -45,8 +47,17 @@ test-go-integration-runtime-matrix: test-go-integration-docker test-go-integrati
 test-python:
 	cd python && poetry run pytest || test $$? -eq 5
 
+test-js:
+	cd js && npm ci && npm test
+
+build-js:
+	cd js && npm ci && npm run build
+
 publish-python:
 	cd python && poetry publish --build $(PYTHON_PUBLISH_ARGS)
+
+publish-js:
+	cd js && npm publish --access public $(NPM_PUBLISH_ARGS)
 
 tidy-go:
 	cd go && GOROOT= go mod tidy

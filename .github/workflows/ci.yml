@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, master]
   workflow_dispatch:
 
 defaults:
@@ -61,3 +61,29 @@ jobs:
       - name: Build wheel
         working-directory: python
         run: python -m build --wheel
+
+  js:
+    name: TypeScript/JavaScript SDK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          cache: npm
+          cache-dependency-path: js/package-lock.json
+
+      - name: Install dependencies
+        working-directory: js
+        run: npm ci
+
+      - name: Test
+        working-directory: js
+        run: npm test
+
+      - name: Build package
+        working-directory: js
+        run: npm run build

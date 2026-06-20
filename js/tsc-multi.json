@@ -1,0 +1,7 @@
+{
+  "targets": [
+    { "extname": ".js", "module": "commonjs" },
+    { "extname": ".mjs", "module": "es2020" }
+  ],
+  "projects": ["tsconfig.json"]
+}

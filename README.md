@@ -6,6 +6,7 @@ This repository contains Beam client SDKs.
 
 - `python/` contains the existing Python package and CLI release inputs.
 - `go/` contains the Go SDK module at `github.com/beam-cloud/beam-client/go`.
+- `js/` contains the TypeScript/JavaScript SDK package `@beamcloud/beam-js`.
 
 ## Development
 
@@ -56,6 +57,18 @@ Run Python tests:
 cd python && poetry run pytest
 ```
 
+Run JS tests:
+
+```bash
+make test-js
+```
+
+Build the JS package:
+
+```bash
+make build-js
+```
+
 Build the Python CLI wheel:
 
 ```bash
@@ -66,6 +79,12 @@ Publish the Python package to PyPI:
 
 ```bash
 POETRY_PYPI_TOKEN_PYPI=... make publish-python
+```
+
+Publish the JS package to npm after `npm login`:
+
+```bash
+make publish-js
 ```
 
 ## Go SDK
@@ -252,3 +271,14 @@ go get github.com/beam-cloud/beam-client/go@v0.1.0
 `release-go.yml` checks the tag shape, runs Go tests, and verifies that a fresh
 module can fetch and import `github.com/beam-cloud/beam-client/go` from GitHub.
 The Go SDK publishes through the Git tag; it has no binary artifact.
+
+JavaScript SDK: create a GitHub release or tag named `js/vX.Y.Z`:
+
+```bash
+git tag js/v1.2.3
+git push origin js/v1.2.3
+```
+
+`release-js.yml` installs dependencies in `js/`, sets the package version from
+the tag, runs tests, builds the package, and publishes `@beamcloud/beam-js` to
+npm. Prereleases publish under the `rc` npm tag.

@@ -1,0 +1,117 @@
+name: JavaScript SDK release
+
+on:
+  push:
+    tags:
+      - "js/v*"
+  release:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      version_tag:
+        description: JS SDK tag to publish, for example js/v1.2.3
+        required: true
+        type: string
+      prerelease:
+        description: Publish under the rc npm tag
+        required: true
+        type: boolean
+        default: false
+      dry_run:
+        description: Run npm publish with --dry-run
+        required: true
+        type: boolean
+        default: true
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    if: github.event_name == 'push' || (github.event_name == 'release' && startsWith(github.ref_name, 'js/v')) || inputs.version_tag != ''
+    name: Publish npm package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [[ -n "${{ inputs.version_tag }}" ]]; then
+            tag="${{ inputs.version_tag }}"
+          else
+            tag="${GITHUB_REF_NAME}"
+          fi
+
+          if [[ ! "$tag" =~ ^js/v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "JS SDK releases must use tags like js/v1.2.3" >&2
+            exit 1
+          fi
+
+          version="${tag#js/v}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          registry-url: "https://registry.npmjs.org"
+          cache: npm
+          cache-dependency-path: js/package-lock.json
+
+      - name: Install dependencies
+        working-directory: js
+        run: npm ci
+
+      - name: Set package version
+        working-directory: js
+        run: npm version "${{ steps.version.outputs.version }}" --no-git-tag-version --allow-same-version
+
+      - name: Test
+        working-directory: js
+        run: npm test
+
+      - name: Build
+        working-directory: js
+        run: npm run build
+
+      - name: Publish
+        working-directory: js
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          args=(--provenance --access public)
+
+          prerelease="${{ github.event.release.prerelease || inputs.prerelease || 'false' }}"
+          if [[ "$prerelease" == "true" ]]; then
+            args+=(--tag rc)
+          fi
+
+          if [[ "${{ inputs.dry_run || 'false' }}" == "true" ]]; then
+            args+=(--dry-run)
+          fi
+
+          npm publish "${args[@]}"
+
+      - name: Release summary
+        run: |
+          {
+            echo "## JavaScript SDK release"
+            echo
+            echo "- Package: \`@beamcloud/beam-js\`"
+            echo "- Version: \`${{ steps.version.outputs.version }}\`"
+            echo "- Tag: \`${{ steps.version.outputs.tag }}\`"
+            echo
+            echo "Install:"
+            echo
+            echo "\`\`\`bash"
+            echo "npm install @beamcloud/beam-js@${{ steps.version.outputs.version }}"
+            echo "\`\`\`"
+          } >> "$GITHUB_STEP_SUMMARY"

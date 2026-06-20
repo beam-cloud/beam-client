@@ -5,14 +5,13 @@
 // helpers.
 //
 // Configuration is resolved from explicit options first, then environment
-// variables, then the user's Beam/Beta9 config file. The common local-gateway
-// setup is:
+// variables, then the user's Beam/Beta9 config file, then Beam production at
+// gateway.beam.cloud:443. For production, set BEAM_TOKEN and create a client:
 //
-//	client, err := beam.NewClient(ctx,
-//		beam.WithToken(os.Getenv("BEAM_TOKEN")),
-//		beam.WithGateway("127.0.0.1", 1993),
-//		beam.WithTLS(false),
-//	)
+//	client, err := beam.NewClient(ctx)
+//
+// For development against a local gateway, use WithGateway("127.0.0.1", 1993)
+// and WithTLS(false).
 //
 // SandboxConfig.Name is the app name that groups related sandboxes. SandboxID
 // returns the generated container ID for a running sandbox.

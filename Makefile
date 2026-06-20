@@ -1,6 +1,8 @@
-.PHONY: test test-go test-go-integration test-go-integration-sync test-go-integration-snapshot test-go-integration-runc test-go-integration-gvisor test-go-integration-docker test-go-integration-docker-runc test-go-integration-docker-gvisor test-go-integration-volumes test-go-integration-volumes-runc test-go-integration-volumes-gvisor test-go-integration-runtime-matrix test-python tidy-go verify-go-install
+.PHONY: test test-go test-go-integration test-go-integration-sync test-go-integration-snapshot test-go-integration-runc test-go-integration-gvisor test-go-integration-docker test-go-integration-docker-runc test-go-integration-docker-gvisor test-go-integration-volumes test-go-integration-volumes-runc test-go-integration-volumes-gvisor test-go-integration-runtime-matrix test-python publish-python tidy-go verify-go-install
 
 RUNC_POOL_ENV = $${BEAM_TEST_RUNC_POOL:+BEAM_TEST_POOL=$$BEAM_TEST_RUNC_POOL}
+PYPI_REPOSITORY ?=
+PYTHON_PUBLISH_ARGS = $(if $(PYPI_REPOSITORY),--repository $(PYPI_REPOSITORY),)
 
 test: test-go test-python
 
@@ -42,6 +44,9 @@ test-go-integration-runtime-matrix: test-go-integration-docker test-go-integrati
 
 test-python:
 	cd python && poetry run pytest || test $$? -eq 5
+
+publish-python:
+	cd python && poetry publish --build $(PYTHON_PUBLISH_ARGS)
 
 tidy-go:
 	cd go && GOROOT= go mod tidy

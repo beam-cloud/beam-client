@@ -1,11 +1,9 @@
 # Beam Go Sandbox Examples
 
-Set `BEAM_TOKEN` and gateway configuration first. For a local beta9 gateway:
+Set `BEAM_TOKEN` first. The SDK uses Beam production by default.
 
 ```bash
 export BEAM_TOKEN=...
-export BEAM_GATEWAY_HOST=127.0.0.1
-export BEAM_GATEWAY_PORT=1993
 ```
 
 Run any example with `go run`:
@@ -41,3 +39,6 @@ Notes:
 - `docker` requires an image built with `Image.WithDocker()` and a sandbox
   created with `DockerEnabled: true`; use `BEAM_DOCKER_POOL=gvisor` to force the
   gVisor pool locally.
+
+Development note: to point examples at a local beta9 gateway, set
+`BEAM_GATEWAY_HOST=127.0.0.1` and `BEAM_GATEWAY_PORT=1993`.

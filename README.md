@@ -62,6 +62,12 @@ Build the Python CLI wheel:
 cd python && poetry build -f wheel
 ```
 
+Publish the Python package to PyPI:
+
+```bash
+POETRY_PYPI_TOKEN_PYPI=... make publish-python
+```
+
 ## Go SDK
 
 The Go module is `github.com/beam-cloud/beam-client/go`.
@@ -86,6 +92,13 @@ import beam "github.com/beam-cloud/beam-client/go"
 
 ### Configuration
 
+For production, set `BEAM_TOKEN` and call `beam.NewClient(ctx)`. The SDK
+defaults to Beam's production gateway at `gateway.beam.cloud:443`.
+
+```bash
+export BEAM_TOKEN=...
+```
+
 `beam.NewClient(ctx)` resolves configuration in this order:
 
 1. Explicit options such as `beam.WithToken` and `beam.WithGateway`.
@@ -94,7 +107,7 @@ import beam "github.com/beam-cloud/beam-client/go"
 4. `~/.beam/config.ini` or `~/.beta9/config.ini`.
 5. `gateway.beam.cloud:443`.
 
-For a local beta9 gateway, use:
+For development against a local beta9 gateway, override the gateway:
 
 ```bash
 export BEAM_TOKEN=...
@@ -186,6 +199,7 @@ Runnable sandbox examples live in `go/examples`:
 
 ```bash
 cd go
+export BEAM_TOKEN=...
 go run ./examples/basic
 go run ./examples/filesystem
 go run ./examples/http

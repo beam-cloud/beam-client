@@ -66,5 +66,4 @@ go run ./examples/sync-local-dir
 ```
 
 Development note: to point examples at a local beta9 gateway, set
-`BEAM_GATEWAY_HOST=127.0.0.1` and `BEAM_GATEWAY_PORT=1993`. To test Docker on a
-specific development pool, set `BEAM_DOCKER_POOL=<pool-name>`.
+`BEAM_GATEWAY_HOST=127.0.0.1` and `BEAM_GATEWAY_PORT=1993`.

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"strings"
 	"time"
 
@@ -21,18 +20,12 @@ func main() {
 	}
 	defer client.Close()
 
-	var pool *beam.PoolConfig
-	if name := os.Getenv("BEAM_DOCKER_POOL"); name != "" {
-		pool = &beam.PoolConfig{Name: name}
-	}
-
 	sandbox, err := client.CreateSandbox(ctx, beam.SandboxConfig{
 		Name:          "go-sdk-examples",
 		Image:         beam.NewImage(beam.WithPythonVersion("python3.11")).WithDocker(),
 		CPU:           2,
 		MemoryMiB:     2048,
 		DockerEnabled: true,
-		Pool:          pool,
 	})
 	if err != nil {
 		log.Fatal(err)

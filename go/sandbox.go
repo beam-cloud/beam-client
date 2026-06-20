@@ -85,7 +85,11 @@ func (c *Client) CreateSandbox(ctx context.Context, config SandboxConfig) (*Sand
 	if !create.GetOk() {
 		return nil, sdkError(ErrSandboxConnection, "create sandbox", create.GetErrorMsg(), nil)
 	}
-	return newSandbox(c, create.GetContainerId(), stub.GetStubId()), nil
+	sb := newSandbox(c, create.GetContainerId(), stub.GetStubId())
+	if err := sb.waitReady(ctx); err != nil {
+		return nil, err
+	}
+	return sb, nil
 }
 
 // ConnectSandbox reconnects to an existing sandbox by container ID.
@@ -116,7 +120,11 @@ func (c *Client) CreateSandboxFromMemorySnapshot(ctx context.Context, checkpoint
 	if !res.GetOk() {
 		return nil, sdkError(ErrSandboxConnection, "create sandbox from snapshot", res.GetErrorMsg(), nil)
 	}
-	return newSandbox(c, res.GetContainerId(), res.GetStubId()), nil
+	sb := newSandbox(c, res.GetContainerId(), res.GetStubId())
+	if err := sb.waitReady(ctx); err != nil {
+		return nil, err
+	}
+	return sb, nil
 }
 
 func newSandbox(c *Client, containerID, stubID string) *Sandbox {
@@ -167,7 +175,13 @@ func (s *Sandbox) Status(ctx context.Context) (SandboxStatus, error) {
 }
 
 // WaitReady blocks until the sandbox reports a running status or ctx is done.
+// CreateSandbox and CreateSandboxFromMemorySnapshot call this internally before
+// returning; most callers do not need to call it directly.
 func (s *Sandbox) WaitReady(ctx context.Context) error {
+	return s.waitReady(ctx)
+}
+
+func (s *Sandbox) waitReady(ctx context.Context) error {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 	var lastErr error

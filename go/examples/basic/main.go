@@ -31,10 +31,6 @@ func main() {
 	}
 	defer sandbox.Terminate(context.Background())
 
-	if err := sandbox.WaitReady(ctx); err != nil {
-		log.Fatal(err)
-	}
-
 	result, err := sandbox.RunCode(ctx, `print("hello from Beam")`, beam.ExecOptions{})
 	if err != nil {
 		log.Fatal(err)

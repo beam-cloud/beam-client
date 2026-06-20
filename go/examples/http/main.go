@@ -33,9 +33,6 @@ func main() {
 	}
 	defer sandbox.Terminate(context.Background())
 
-	if err := sandbox.WaitReady(ctx); err != nil {
-		log.Fatal(err)
-	}
 	if err := sandbox.FS.Upload(ctx, "/workspace/index.html", []byte("hello over HTTP\n"), 0o644); err != nil {
 		log.Fatal(err)
 	}

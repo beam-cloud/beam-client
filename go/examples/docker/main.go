@@ -39,10 +39,6 @@ func main() {
 	}
 	defer sandbox.Terminate(context.Background())
 
-	if err := sandbox.WaitReady(ctx); err != nil {
-		log.Fatal(err)
-	}
-
 	version, err := sandbox.Docker.Raw(ctx, "version", "--format", "{{.Server.Version}}")
 	if err != nil {
 		log.Fatal(err)

@@ -51,10 +51,6 @@ func main() {
 	}
 	defer sandbox.Terminate(context.Background())
 
-	if err := sandbox.WaitReady(ctx); err != nil {
-		log.Fatal(err)
-	}
-
 	result, err := sandbox.RunCode(ctx, `print(open("input.txt").read())`, beam.ExecOptions{Workdir: "/mnt/code"})
 	if err != nil {
 		log.Fatal(err)

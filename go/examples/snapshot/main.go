@@ -31,9 +31,6 @@ func main() {
 	}
 	defer sandbox.Terminate(context.Background())
 
-	if err := sandbox.WaitReady(ctx); err != nil {
-		log.Fatal(err)
-	}
 	if err := sandbox.FS.Upload(ctx, "/workspace/checkpoint.txt", []byte("state from before snapshot"), 0o644); err != nil {
 		log.Fatal(err)
 	}
@@ -50,9 +47,6 @@ func main() {
 	}
 	defer restored.Terminate(context.Background())
 
-	if err := restored.WaitReady(ctx); err != nil {
-		log.Fatal(err)
-	}
 	result, err := restored.RunCode(ctx, `print(open("/workspace/checkpoint.txt").read())`, beam.ExecOptions{})
 	if err != nil {
 		log.Fatal(err)

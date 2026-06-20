@@ -30,10 +30,6 @@ func main() {
 	}
 	defer sandbox.Terminate(context.Background())
 
-	if err := sandbox.WaitReady(ctx); err != nil {
-		log.Fatal(err)
-	}
-
 	if err := sandbox.FS.Mkdir(ctx, "/workspace/data", 0o755); err != nil {
 		log.Fatal(err)
 	}

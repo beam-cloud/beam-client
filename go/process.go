@@ -8,6 +8,17 @@ import (
 	pb "github.com/beam-cloud/beta9/proto"
 )
 
+var sandboxExecReadyRetryDelay = 500 * time.Millisecond
+
+const sandboxExecReadyTimeout = 90 * time.Second
+
+var sandboxExecReadinessErrors = []string{
+	"failed to connect to sandbox",
+	"process manager not ready",
+	"sandbox process manager is not ready",
+	"process manager failed to become ready",
+}
+
 // ExecOptions configures a process execution inside a sandbox.
 type ExecOptions struct {
 	Workdir string
@@ -73,6 +84,34 @@ func (s *Sandbox) ExecShell(ctx context.Context, command string, opts ExecOption
 	if strings.TrimSpace(command) == "" {
 		return nil, sdkError(ErrValidation, "exec", "command must not be empty", nil)
 	}
+	retryCtx, cancelRetry := context.WithTimeout(ctx, sandboxExecReadyTimeout)
+	defer cancelRetry()
+
+	var lastErr error
+	for {
+		process, err := s.execShellOnce(retryCtx, command, opts)
+		if err == nil {
+			return process, nil
+		}
+		if !isSandboxExecReadinessError(err.Error()) {
+			return nil, err
+		}
+		lastErr = err
+
+		timer := time.NewTimer(sandboxExecReadyRetryDelay)
+		select {
+		case <-retryCtx.Done():
+			timer.Stop()
+			if lastErr != nil {
+				return nil, lastErr
+			}
+			return nil, wrapError(ErrProcess, "exec", retryCtx.Err())
+		case <-timer.C:
+		}
+	}
+}
+
+func (s *Sandbox) execShellOnce(ctx context.Context, command string, opts ExecOptions) (*Process, error) {
 	callCtx := ctx
 	cancel := func() {}
 	if opts.Timeout > 0 {
@@ -99,6 +138,16 @@ func (s *Sandbox) ExecShell(ctx context.Context, command string, opts ExecOption
 	p.Stdout = &OutputReader{process: p, stream: "stdout"}
 	p.Stderr = &OutputReader{process: p, stream: "stderr"}
 	return p, nil
+}
+
+func isSandboxExecReadinessError(message string) bool {
+	normalized := strings.ToLower(message)
+	for _, marker := range sandboxExecReadinessErrors {
+		if strings.Contains(normalized, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 // RunCode executes Python code in the sandbox and waits for completion.

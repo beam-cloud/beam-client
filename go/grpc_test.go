@@ -104,6 +104,8 @@ type fakePodService struct {
 	pb.UnimplementedPodServiceServer
 	createReq       *pb.CreatePodRequest
 	execReq         *pb.PodSandboxExecRequest
+	execResponses   []*pb.PodSandboxExecResponse
+	execCalls       int
 	uploadReq       *pb.PodSandboxUploadFileRequest
 	exposeURL       string
 	listURLs        map[int32]string
@@ -123,14 +125,23 @@ func (s *fakePodService) SandboxConnect(context.Context, *pb.PodSandboxConnectRe
 
 func (s *fakePodService) SandboxExec(_ context.Context, req *pb.PodSandboxExecRequest) (*pb.PodSandboxExecResponse, error) {
 	s.execReq = req
+	s.execCalls++
+	if len(s.execResponses) > 0 {
+		res := s.execResponses[0]
+		s.execResponses = s.execResponses[1:]
+		return res, nil
+	}
 	return &pb.PodSandboxExecResponse{Ok: true, Pid: 42}, nil
 }
 
-func (s *fakePodService) SandboxStatus(context.Context, *pb.PodSandboxStatusRequest) (*pb.PodSandboxStatusResponse, error) {
+func (s *fakePodService) SandboxStatus(_ context.Context, req *pb.PodSandboxStatusRequest) (*pb.PodSandboxStatusResponse, error) {
 	if len(s.statusResponses) > 0 {
 		res := s.statusResponses[0]
 		s.statusResponses = s.statusResponses[1:]
 		return res, nil
+	}
+	if req.GetPid() == 0 {
+		return &pb.PodSandboxStatusResponse{Ok: true, Status: "running", ExitCode: -1}, nil
 	}
 	return &pb.PodSandboxStatusResponse{Ok: true, Status: "complete", ExitCode: 0}, nil
 }
@@ -423,6 +434,29 @@ func TestSandboxWaitReadyRetriesTransientStatusErrors(t *testing.T) {
 	}
 	if len(services.pod.statusResponses) != 0 {
 		t.Fatalf("expected all status responses to be consumed, got %d", len(services.pod.statusResponses))
+	}
+}
+
+func TestExecRetriesSandboxReadinessErrors(t *testing.T) {
+	client, services := newFakeClient(t)
+	services.pod.execResponses = []*pb.PodSandboxExecResponse{
+		{Ok: false, ErrorMsg: "sandbox process manager is not ready"},
+		{Ok: true, Pid: 42},
+	}
+	oldDelay := sandboxExecReadyRetryDelay
+	sandboxExecReadyRetryDelay = time.Millisecond
+	t.Cleanup(func() { sandboxExecReadyRetryDelay = oldDelay })
+
+	sb, err := client.ConnectSandbox(context.Background(), "container-123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	proc, err := sb.Exec(context.Background(), []string{"echo", "ready"}, ExecOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if proc.PID != 42 || services.pod.execCalls != 2 {
+		t.Fatalf("expected retry to create pid 42 after 2 exec calls, pid=%d calls=%d", proc.PID, services.pod.execCalls)
 	}
 }
 

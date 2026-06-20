@@ -38,6 +38,7 @@ go run ./examples/filesystem
 go run ./examples/http
 go run ./examples/snapshot
 go run ./examples/docker
+go run ./examples/resources
 ```
 
 Install the SDK from GitHub:
@@ -52,12 +53,13 @@ sandboxes.
 Notes:
 
 - `basic` demonstrates `RunCode`, argv-safe `Exec`, and live process streaming.
-- `filesystem` covers upload, stat, list, replace, find, and download.
+- `filesystem` covers text reads/writes, stat, list, replace, find, and download.
 - `http` starts a server, exposes a port, lists URLs, and sends the required
   bearer token for local protected routes.
 - `snapshot` creates a memory snapshot and restores a new sandbox from it.
 - `docker` requires an image built with `Image.WithDocker()` and a sandbox
   created with `DockerEnabled: true`.
+- `resources` shows GPU, secrets, volume, and cloud bucket configuration.
 
 Additional development examples:
 

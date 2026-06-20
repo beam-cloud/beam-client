@@ -385,6 +385,11 @@ func TestIntegrationSandboxLifecycle(t *testing.T) {
 
 	sb := sandboxes[0]
 	requireSandboxStatus(ctx, t, sb)
+	if exitCode, err := sb.Poll(ctx); err != nil {
+		t.Fatal(err)
+	} else if exitCode != nil {
+		t.Fatalf("new sandbox unexpectedly exited with code %d", *exitCode)
+	}
 
 	connected, err := client.ConnectSandbox(ctx, sb.SandboxID())
 	if err != nil {

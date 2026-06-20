@@ -33,7 +33,7 @@ func main() {
 	if err := sandbox.FS.Mkdir(ctx, "/workspace/data", 0o755); err != nil {
 		log.Fatal(err)
 	}
-	if err := sandbox.FS.Upload(ctx, "/workspace/data/message.txt", []byte("hello from the Go SDK\n"), 0o644); err != nil {
+	if err := sandbox.FS.WriteText(ctx, "/workspace/data/message.txt", "hello from the Go SDK\n", 0o644); err != nil {
 		log.Fatal(err)
 	}
 	if err := sandbox.FS.Replace(ctx, "/workspace/data", "Go SDK", "Beam sandbox"); err != nil {
@@ -52,9 +52,9 @@ func main() {
 	}
 	fmt.Printf("matches: %d\n", len(matches))
 
-	data, err := sandbox.FS.Download(ctx, "/workspace/data/message.txt")
+	text, err := sandbox.FS.ReadText(ctx, "/workspace/data/message.txt")
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Print(string(data))
+	fmt.Print(text)
 }

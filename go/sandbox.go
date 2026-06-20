@@ -174,6 +174,63 @@ func (s *Sandbox) Status(ctx context.Context) (SandboxStatus, error) {
 	return SandboxStatus{Status: res.GetStatus(), ExitCode: int(res.GetExitCode())}, nil
 }
 
+// Poll returns the sandbox exit code if it has exited. A nil return value means
+// the sandbox is still running.
+func (s *Sandbox) Poll(ctx context.Context) (*int, error) {
+	status, err := s.Status(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !sandboxStatusIsTerminal(status.Status) {
+		return nil, nil
+	}
+	exitCode := status.ExitCode
+	if exitCode < 0 {
+		exitCode = defaultSandboxExitCode(status.Status)
+	}
+	return &exitCode, nil
+}
+
+// Wait blocks until the sandbox exits and returns its exit code.
+func (s *Sandbox) Wait(ctx context.Context) (int, error) {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		exitCode, err := s.Poll(ctx)
+		if err != nil {
+			return 0, err
+		}
+		if exitCode != nil {
+			return *exitCode, nil
+		}
+		select {
+		case <-ctx.Done():
+			return 0, wrapError(ErrSandboxConnection, "wait sandbox", ctx.Err())
+		case <-ticker.C:
+		}
+	}
+}
+
+func sandboxStatusIsTerminal(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "complete", "completed", "exited", "failed", "error", "stopped", "terminated":
+		return true
+	default:
+		return false
+	}
+}
+
+func defaultSandboxExitCode(status string) int {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "failed", "error":
+		return 1
+	case "terminated":
+		return 137
+	default:
+		return 0
+	}
+}
+
 // WaitReady blocks until the sandbox reports a running status or ctx is done.
 // CreateSandbox and CreateSandboxFromMemorySnapshot call this internally before
 // returning; most callers do not need to call it directly.

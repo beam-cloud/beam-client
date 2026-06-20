@@ -437,6 +437,37 @@ func TestSandboxWaitReadyRetriesTransientStatusErrors(t *testing.T) {
 	}
 }
 
+func TestSandboxPollAndWait(t *testing.T) {
+	client, services := newFakeClient(t)
+	sb, err := client.ConnectSandbox(context.Background(), "container-123")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	services.pod.statusResponses = []*pb.PodSandboxStatusResponse{
+		{Ok: true, Status: "running", ExitCode: -1},
+	}
+	exitCode, err := sb.Poll(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exitCode != nil {
+		t.Fatalf("expected running sandbox to have nil exit code, got %d", *exitCode)
+	}
+
+	services.pod.statusResponses = []*pb.PodSandboxStatusResponse{
+		{Ok: true, Status: "running", ExitCode: -1},
+		{Ok: true, Status: "complete", ExitCode: 17},
+	}
+	waitExitCode, err := sb.Wait(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if waitExitCode != 17 {
+		t.Fatalf("unexpected wait exit code: %d", waitExitCode)
+	}
+}
+
 func TestExecRetriesSandboxReadinessErrors(t *testing.T) {
 	client, services := newFakeClient(t)
 	services.pod.execResponses = []*pb.PodSandboxExecResponse{
@@ -629,12 +660,25 @@ func TestProcessAndFilesystemRPCs(t *testing.T) {
 	if services.pod.uploadReq.GetContainerPath() != "/workspace/file.txt" || services.pod.uploadReq.GetMode() != 0o600 {
 		t.Fatalf("bad upload request: %#v", services.pod.uploadReq)
 	}
+	if err := sb.FS.WriteText(context.Background(), "/workspace/text.txt", "text", 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if services.pod.uploadReq.GetContainerPath() != "/workspace/text.txt" || string(services.pod.uploadReq.GetData()) != "text" {
+		t.Fatalf("bad write text request: %#v", services.pod.uploadReq)
+	}
 	data, err := sb.FS.Download(context.Background(), "/workspace/file.txt")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if string(data) != "downloaded" {
 		t.Fatalf("bad download: %q", data)
+	}
+	text, err := sb.FS.ReadText(context.Background(), "/workspace/file.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text != "downloaded" {
+		t.Fatalf("bad read text: %q", text)
 	}
 	info, err := sb.FS.Stat(context.Background(), "/workspace/file.txt")
 	if err != nil {
@@ -649,6 +693,9 @@ func TestProcessAndFilesystemRPCs(t *testing.T) {
 	}
 	if len(results) != 1 || results[0].Matches[0].Content != "needle" {
 		t.Fatalf("bad find results: %#v", results)
+	}
+	if err := sb.FS.Remove(context.Background(), "/workspace/file.txt"); err != nil {
+		t.Fatal(err)
 	}
 }
 

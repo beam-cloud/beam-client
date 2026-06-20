@@ -65,6 +65,16 @@ func (fsys *FileSystem) Upload(ctx context.Context, sandboxPath string, data []b
 	return nil
 }
 
+// WriteBytes writes data to sandboxPath. It is an alias for Upload.
+func (fsys *FileSystem) WriteBytes(ctx context.Context, sandboxPath string, data []byte, mode os.FileMode) error {
+	return fsys.Upload(ctx, sandboxPath, data, mode)
+}
+
+// WriteText writes text to sandboxPath.
+func (fsys *FileSystem) WriteText(ctx context.Context, sandboxPath, text string, mode os.FileMode) error {
+	return fsys.Upload(ctx, sandboxPath, []byte(text), mode)
+}
+
 // UploadFile uploads a local file to sandboxPath.
 func (fsys *FileSystem) UploadFile(ctx context.Context, localPath, sandboxPath string) error {
 	data, err := os.ReadFile(localPath)
@@ -91,6 +101,20 @@ func (fsys *FileSystem) Download(ctx context.Context, sandboxPath string) ([]byt
 		return nil, sdkError(ErrFilesystem, "download file", res.GetErrorMsg(), nil)
 	}
 	return res.GetData(), nil
+}
+
+// ReadBytes reads a sandbox file into memory. It is an alias for Download.
+func (fsys *FileSystem) ReadBytes(ctx context.Context, sandboxPath string) ([]byte, error) {
+	return fsys.Download(ctx, sandboxPath)
+}
+
+// ReadText reads a sandbox file as a string.
+func (fsys *FileSystem) ReadText(ctx context.Context, sandboxPath string) (string, error) {
+	data, err := fsys.Download(ctx, sandboxPath)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }
 
 // DownloadFile downloads a sandbox file to localPath.
@@ -189,6 +213,19 @@ func (fsys *FileSystem) RemoveDir(ctx context.Context, sandboxPath string) error
 		return sdkError(ErrFilesystem, "remove dir", res.GetErrorMsg(), nil)
 	}
 	return nil
+}
+
+// Remove removes a sandbox file or directory. Directories are removed with the
+// backend directory-delete RPC, which may require the directory to be empty.
+func (fsys *FileSystem) Remove(ctx context.Context, sandboxPath string) error {
+	info, err := fsys.Stat(ctx, sandboxPath)
+	if err != nil {
+		return err
+	}
+	if info.IsDir {
+		return fsys.RemoveDir(ctx, sandboxPath)
+	}
+	return fsys.RemoveFile(ctx, sandboxPath)
 }
 
 // Replace replaces pattern with replacement under sandboxPath.

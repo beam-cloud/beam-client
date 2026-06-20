@@ -145,6 +145,10 @@ if err != nil {
 fmt.Print(result.Stdout)
 ```
 
+Use `sandbox.Status`, `sandbox.Poll`, and `sandbox.Wait` when you need to
+observe sandbox lifecycle state. `CreateSandbox` waits for the sandbox to be
+ready before returning.
+
 ### Processes And Logs
 
 Use `Exec` for argv-safe command execution and `ExecShell` when you intentionally
@@ -166,6 +170,25 @@ exitCode, err := proc.Stream(ctx, func(entry beam.LogEntry) {
 
 Sandbox filesystem APIs are available through `sandbox.FS`. Beam volumes and
 cloud buckets are configured with `beam.NewVolume` and `beam.NewCloudBucket`.
+Secrets and GPUs are configured directly on `SandboxConfig`.
+
+```go
+sandbox, err := client.CreateSandbox(ctx, beam.SandboxConfig{
+    Name:     "resources-example",
+    Image:    beam.NewImage(beam.WithPythonVersion("python3.11")),
+    GPU:      "T4",
+    GPUCount: 1,
+    Secrets:  []string{"MY_SECRET"},
+    Volumes: []beam.VolumeMount{
+        beam.NewVolume("cache", "/mnt/cache"),
+        beam.NewCloudBucket("/mnt/bucket", beam.CloudBucketConfig{
+            BucketName: "my-bucket",
+            Region:     "us-east-1",
+            ReadOnly:   true,
+        }),
+    },
+})
+```
 
 Docker-in-Docker requires both `Image.WithDocker()` and
 `SandboxConfig.DockerEnabled`. Docker helpers default inner containers and
@@ -205,6 +228,7 @@ go run ./examples/filesystem
 go run ./examples/http
 go run ./examples/snapshot
 go run ./examples/docker
+go run ./examples/resources
 ```
 
 ## Releases

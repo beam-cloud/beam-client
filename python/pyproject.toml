@@ -10,6 +10,7 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.8"
+packaging = ">=24.0"
 requests = "^2.31.0"
 websockets = ">=13,<16"
 beta9 = "^0.1.262"

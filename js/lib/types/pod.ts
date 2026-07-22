@@ -50,12 +50,17 @@ export interface PodSandboxExecRequest {
   command: string;
   cwd?: string;
   env?: Record<string, string>;
+  wait?: boolean;
 }
 
 export interface PodSandboxExecResponse {
   ok: boolean;
   errorMsg?: string;
   pid: number;
+  done?: boolean;
+  exitCode?: number;
+  stdout?: string;
+  stderr?: string;
 }
 export interface PodSandboxStatusRequest {
   containerId: string;
@@ -326,6 +331,8 @@ export interface PodSandboxCreateImageFromFilesystemResponse {
 export interface ExecOptions {
   cwd?: string;
   env?: Record<string, string>;
+  /** Wait briefly for completion and return inline status/output when available. */
+  wait?: boolean;
 }
 
 // Store requests here?

@@ -165,6 +165,84 @@ describe("Sandbox network parity", () => {
       8080: "https://8080.example.com",
     });
   });
+
+  test("shares runtime preparation across concurrent sandbox creates", async () => {
+    const sandbox = new Sandbox({ name: "concurrent-sandbox" });
+    let releasePreparation!: (prepared: boolean) => void;
+    const preparation = new Promise<boolean>((resolve) => {
+      releasePreparation = resolve;
+    });
+    const prepareRuntimeMock = jest
+      .spyOn(sandbox.stub, "prepareRuntime")
+      .mockReturnValue(preparation);
+    let nextContainer = 0;
+    const requestMock = jest
+      .spyOn(beamClient, "request")
+      .mockImplementation(async (config) => {
+        if (config.url === "api/v1/gateway/pods") {
+          nextContainer += 1;
+          return {
+            data: {
+              ok: true,
+              containerId: `sandbox-${nextContainer}`,
+            },
+          };
+        }
+        if (config.url?.endsWith("/connect")) {
+          return { data: { ok: true } };
+        }
+        throw new Error(`Unexpected request: ${config.url}`);
+      });
+
+    const firstCreate = sandbox.create();
+    const secondCreate = sandbox.create();
+
+    expect(prepareRuntimeMock).toHaveBeenCalledTimes(1);
+    releasePreparation(true);
+
+    const instances = await Promise.all([firstCreate, secondCreate]);
+    expect(instances.map((instance) => instance.containerId)).toEqual([
+      "sandbox-1",
+      "sandbox-2",
+    ]);
+    expect(requestMock).toHaveBeenCalledTimes(4);
+  });
+
+  test("returns inline exec results without follow-up requests", async () => {
+    const requestMock = jest.spyOn(beamClient, "request").mockResolvedValue({
+      data: {
+        ok: true,
+        pid: 7,
+        done: true,
+        exitCode: 0,
+        stdout: "v20.0.0\n",
+        stderr: "",
+      },
+    });
+
+    const instance = new SandboxInstance(
+      {
+        containerId: "sandbox-123",
+        stubId: "stub-123",
+        url: "",
+        ok: true,
+        errorMsg: "",
+      },
+      new Sandbox({ name: "networked-sandbox" })
+    );
+
+    const process = await instance.exec(["node", "-v"], { wait: true });
+
+    await expect(process.wait()).resolves.toBe(0);
+    await expect(process.stdout.read()).resolves.toBe("v20.0.0\n");
+    await expect(process.stderr.read()).resolves.toBe("");
+    expect(requestMock).toHaveBeenCalledTimes(1);
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ wait: true }),
+      })
+    );
+  });
 });
 
 describe("prepareRuntime surfaces real errors via lastError", () => {

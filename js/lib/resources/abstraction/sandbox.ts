@@ -870,7 +870,7 @@ export class SandboxProcess {
       async _process_stream(streamName: "stdout" | "stderr") {
         const isStdout = streamName === "stdout";
         const stream = isStdout ? this._stdout : this._stderr;
-        const chunk = await (stream as any)._fetch_next_chunk();
+        const chunk = await stream.read();
         if (chunk) {
           if (isStdout) this._stdoutBuffer += chunk;
           else this._stderrBuffer += chunk;
@@ -886,7 +886,8 @@ export class SandboxProcess {
             this._queue.push(line + "\n");
           }
         } else {
-          const [exitCode] = await self.status();
+          const exitCode =
+            self.exitCode >= 0 ? self.exitCode : (await self.status())[0];
           if (exitCode >= 0) {
             const buf = isStdout ? this._stdoutBuffer : this._stderrBuffer;
             if (buf) {

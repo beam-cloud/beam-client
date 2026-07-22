@@ -243,6 +243,39 @@ describe("Sandbox network parity", () => {
       })
     );
   });
+
+  test("iterates inline combined logs without follow-up requests", async () => {
+    const requestMock = jest.spyOn(beamClient, "request").mockResolvedValue({
+      data: {
+        ok: true,
+        pid: 8,
+        done: true,
+        exitCode: 0,
+        stdout: "first\nsecond\n",
+        stderr: "warning\n",
+      },
+    });
+
+    const instance = new SandboxInstance(
+      {
+        containerId: "sandbox-123",
+        stubId: "stub-123",
+        url: "",
+        ok: true,
+        errorMsg: "",
+      },
+      new Sandbox({ name: "networked-sandbox" })
+    );
+
+    const process = await instance.exec(["node", "-v"], { wait: true });
+    const lines: string[] = [];
+    for await (const line of process.logs) {
+      lines.push(line);
+    }
+
+    expect(lines).toEqual(["first\n", "second\n", "warning\n"]);
+    expect(requestMock).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("prepareRuntime surfaces real errors via lastError", () => {

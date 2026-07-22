@@ -61,6 +61,7 @@ function shellQuote(arg: string): string {
  */
 export class Sandbox extends Pod {
   public syncLocalDir: boolean = false;
+  private runtimePreparation?: Promise<boolean>;
 
   constructor(config: CreateStubConfig, syncLocalDir: boolean = false) {
     super(config);
@@ -192,12 +193,29 @@ export class Sandbox extends Pod {
 
     const ignorePatterns = this.syncLocalDir ? undefined : ["*"];
 
-    const prepared = await this.stub.prepareRuntime(
-      undefined,
-      EStubType.Sandbox,
-      true,
-      ignorePatterns,
-    );
+    if (!this.runtimePreparation) {
+      this.runtimePreparation = this.stub.prepareRuntime(
+        undefined,
+        EStubType.Sandbox,
+        true,
+        ignorePatterns,
+      );
+    }
+
+    const currentPreparation = this.runtimePreparation;
+    let prepared: boolean;
+    try {
+      prepared = await currentPreparation;
+    } catch (error) {
+      if (this.runtimePreparation === currentPreparation) {
+        this.runtimePreparation = undefined;
+      }
+      throw error;
+    }
+
+    if (!prepared && this.runtimePreparation === currentPreparation) {
+      this.runtimePreparation = undefined;
+    }
     if (!prepared) {
       const detail = this.stub.lastError?.message ?? "unknown reason";
       throw new SandboxConnectionError(`Failed to prepare runtime: ${detail}`);
@@ -453,7 +471,11 @@ export class SandboxInstance extends PodInstance {
     cwd?: string,
     env?: Record<string, string>,
   ): Promise<SandboxProcessResponse | SandboxProcess> {
-    const process = await this.exec(["python3", "-c", code], { cwd, env });
+    const process = await this.exec(["python3", "-c", code], {
+      cwd,
+      env,
+      wait: blocking,
+    });
     if (blocking) {
       await process.wait();
       const [stdoutStr, stderrStr] = await Promise.all([
@@ -492,7 +514,7 @@ export class SandboxInstance extends PodInstance {
 
   private async _exec(
     shellCommand: string,
-    opts?: { cwd?: string; env?: Record<string, string> },
+    opts?: ExecOptions,
   ): Promise<SandboxProcess> {
     const resp = await beamClient.request({
       method: "POST",
@@ -501,6 +523,7 @@ export class SandboxInstance extends PodInstance {
         command: shellCommand,
         cwd: opts?.cwd,
         env: opts?.env,
+        wait: opts?.wait ?? false,
       },
     });
     const data = resp.data as PodSandboxExecResponse;
@@ -508,7 +531,7 @@ export class SandboxInstance extends PodInstance {
       throw new SandboxProcessError(data.errorMsg || "Failed to start process");
     }
 
-    const process = new SandboxProcess(this, data.pid);
+    const process = new SandboxProcess(this, data.pid, data);
     this.processes[data.pid] = process;
     return process;
   }
@@ -594,9 +617,15 @@ export class SandboxProcessStream {
   constructor(
     process: SandboxProcess,
     fetchFn: () => Promise<string> | string,
+    initialOutput?: string,
   ) {
     this.process = process;
     this.fetch_fn = fetchFn;
+    if (initialOutput !== undefined) {
+      this._buffer = initialOutput;
+      this._last_output = initialOutput;
+      this._closed = true;
+    }
   }
 
   public [Symbol.asyncIterator](): AsyncIterableIterator<string> {
@@ -682,6 +711,9 @@ export class SandboxProcessStream {
   public async read(): Promise<string> {
     let data = this._buffer;
     this._buffer = "";
+    if (this._closed) {
+      return data;
+    }
     while (true) {
       const chunk = await this._fetch_next_chunk();
       if (chunk) {
@@ -708,6 +740,9 @@ export class SandboxProcess {
   public env: string[] = [];
   public running: boolean = true;
   private _status: string = "";
+  private _inlineDone: boolean = false;
+  private _inlineStdout: string = "";
+  private _inlineStderr: string = "";
 
   constructor(
     sandboxInstance: SandboxInstance,
@@ -718,6 +753,9 @@ export class SandboxProcess {
       env?: string[];
       exitCode?: number;
       running?: boolean;
+      done?: boolean;
+      stdout?: string;
+      stderr?: string;
     },
   ) {
     this.sandbox_instance = sandboxInstance;
@@ -727,14 +765,28 @@ export class SandboxProcess {
     this.env = info?.env ?? [];
     this.exitCode = info?.exitCode ?? -1;
     this.running = info?.running ?? this.exitCode < 0;
+    if (info?.done) {
+      this._inlineDone = true;
+      this.exitCode = info.exitCode ?? 0;
+      this.running = false;
+      this._status = "done";
+      this._inlineStdout = info.stdout || "";
+      this._inlineStderr = info.stderr || "";
+    }
   }
 
   /** Wait for the process to complete and return the exit code. */
   public async wait(): Promise<number> {
+    if (this.exitCode >= 0) {
+      return this.exitCode;
+    }
+
     [this.exitCode, this._status] = await this.status();
     while (this.exitCode < 0) {
       [this.exitCode, this._status] = await this.status();
-      await new Promise((r) => setTimeout(r, 100));
+      if (this.exitCode < 0) {
+        await new Promise((r) => setTimeout(r, 100));
+      }
     }
     return this.exitCode;
   }
@@ -787,7 +839,7 @@ export class SandboxProcess {
       });
       const data = resp.data as { ok: boolean; stdout?: string };
       return data.stdout || "";
-    });
+    }, this._inlineDone ? this._inlineStdout : undefined);
   }
 
   /** Get a handle to a stream of the process's stderr. */
@@ -800,7 +852,7 @@ export class SandboxProcess {
       });
       const data = resp.data as { ok: boolean; stderr?: string };
       return data.stderr || "";
-    });
+    }, this._inlineDone ? this._inlineStderr : undefined);
   }
 
   /** Returns a combined stream of both stdout and stderr. */
@@ -818,7 +870,7 @@ export class SandboxProcess {
       async _process_stream(streamName: "stdout" | "stderr") {
         const isStdout = streamName === "stdout";
         const stream = isStdout ? this._stdout : this._stderr;
-        const chunk = await (stream as any)._fetch_next_chunk();
+        const chunk = await stream.read();
         if (chunk) {
           if (isStdout) this._stdoutBuffer += chunk;
           else this._stderrBuffer += chunk;
@@ -834,7 +886,8 @@ export class SandboxProcess {
             this._queue.push(line + "\n");
           }
         } else {
-          const [exitCode] = await self.status();
+          const exitCode =
+            self.exitCode >= 0 ? self.exitCode : (await self.status())[0];
           if (exitCode >= 0) {
             const buf = isStdout ? this._stdoutBuffer : this._stderrBuffer;
             if (buf) {

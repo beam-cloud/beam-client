@@ -26,13 +26,20 @@ def check_version():
     if current_version >= minimum_version:
         return
 
+    # Use the interpreter that is running the Beam CLI. A bare `pip` executable
+    # may belong to a different Python installation, leaving this CLI unchanged.
+    upgrade_command = f'"{sys.executable}" -m pip install --upgrade beam-client'
+
     click.echo(
         (
-            f"{click.style('Update Required', fg='yellow', bold=True)}\n\n"
-            f"Your current version: {click.style(str(current_version), bold=True)}\n"
-            f"Minimum required version: {click.style(str(minimum_version), fg='yellow', bold=True)}\n"
-            "\nPlease upgrade to the latest version.\n"
-            f"  {click.style('pip install --upgrade beam-client', bold=True)}\n"
+            f"{click.style('Beam CLI update required', fg='yellow', bold=True)}\n\n"
+            f"Installed: {click.style(str(current_version), bold=True)}\n"
+            f"Minimum:   {click.style(str(minimum_version), fg='yellow', bold=True)}\n"
+            f"Python:    {sys.executable}\n"
+            "\nUpgrade this installation (not a different `pip` on your PATH):\n"
+            f"  {click.style(upgrade_command, bold=True)}\n"
+            "\nThen verify:\n"
+            f"  {click.style('beam --version', bold=True)}\n"
         )
     )
 

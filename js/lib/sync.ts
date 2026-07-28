@@ -12,9 +12,9 @@ import { readdir } from "fs/promises";
 import { tmpdir } from "os";
 import { join, resolve, relative } from "path";
 import { formatBytes, uploadToPresignedUrl } from "./util";
-import archiver from "archiver";
 import axios from "axios";
 import ignore from "ignore";
+import { ZipFile } from "yazl";
 import beamClient from "./index";
 
 // Global workspace object id to signal to any other threads that the workspace has already been synced
@@ -236,48 +236,13 @@ export class FileSyncer {
   }> {
     const tempZipPath = join(tmpdir(), `beam-sync-${Date.now()}.zip`);
     const output = createWriteStream(tempZipPath);
-    const archive = archiver("zip", {
-      zlib: { level: 9 }, // Maximum compression
-      forceLocalTime: true, // Better compatibility
-      store: false, // Always compress
-    });
+    const archive = new ZipFile();
 
     let totalFiles = 0;
     let processedFiles = 0;
+    let totalBytes = 0;
 
-    // Enhanced event handling
-    archive.on("error", (err) => {
-      console.error("Archive error:", err);
-      throw err;
-    });
-
-    archive.on("warning", (err) => {
-      if (err.code === "ENOENT") {
-        console.warn("File not found (skipping):", err.path);
-      } else {
-        console.warn("Archive warning:", err);
-      }
-    });
-
-    // Progress tracking
-    archive.on("entry", (entry) => {
-      processedFiles++;
-      if (totalFiles > 0) {
-        const progress = ((processedFiles / totalFiles) * 100).toFixed(1);
-        console.log(
-          `Progress: ${progress}% (${processedFiles}/${totalFiles}) - ${entry.name}`
-        );
-      }
-    });
-
-    // Handle output stream errors
-    output.on("error", (err) => {
-      console.error("Output stream error:", err);
-      throw err;
-    });
-
-    // Pipe archive data to the file
-    archive.pipe(output);
+    archive.outputStream.pipe(output);
 
     // Count total files first for progress tracking
     const allFiles: string[] = [];
@@ -294,10 +259,18 @@ export class FileSyncer {
         const stats = statSync(filePath);
 
         if (stats.isFile()) {
-          archive.file(filePath, {
-            name: relativePath,
-            date: new Date('1980-01-01T00:00:00'), // Normalize mtime for deterministic hashing
+          totalBytes += stats.size;
+          archive.addFile(filePath, relativePath, {
+            compressionLevel: 9,
+            forceDosTimestamp: true,
+            mtime: new Date("1980-01-01T00:00:00"), // Normalize mtime for deterministic hashing
           });
+
+          processedFiles++;
+          const progress = ((processedFiles / totalFiles) * 100).toFixed(1);
+          console.log(
+            `Progress: ${progress}% (${processedFiles}/${totalFiles}) - ${relativePath}`
+          );
         }
       } catch (error) {
         console.warn(`Failed to add ${filePath}: ${error}`);
@@ -306,24 +279,26 @@ export class FileSyncer {
 
     // Finalize the archive - this triggers the actual compression
     console.log("Finalizing archive...");
-    await archive.finalize();
 
-    // Wait for the output stream to close
-    await new Promise((resolve, reject) => {
+    const archiveComplete = new Promise<void>((resolve, reject) => {
+      archive.on("error", reject);
+      archive.outputStream.on("error", reject);
       output.on("close", () => {
         console.log("Archive created successfully");
         resolve(undefined);
       });
       output.on("error", reject);
     });
+    archive.end();
+    await archiveComplete;
 
     const stats = statSync(tempZipPath);
     const hash = await FileSyncer.calculateSha256(tempZipPath);
 
     // Log compression statistics
     const compressionRatio =
-      archive.pointer() > 0
-        ? ((stats.size / archive.pointer()) * 100).toFixed(1)
+      totalBytes > 0
+        ? ((stats.size / totalBytes) * 100).toFixed(1)
         : "0";
     console.log(
       `Archive stats: ${formatBytes(

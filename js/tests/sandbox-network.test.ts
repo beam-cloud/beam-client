@@ -120,6 +120,20 @@ describe("Sandbox network parity", () => {
     );
   });
 
+  test("terminates by ID without connecting first", async () => {
+    const requestMock = jest.spyOn(beamClient, "request").mockResolvedValue({
+      data: { ok: true },
+    });
+
+    await expect(Sandbox.terminate("sandbox-1")).resolves.toBe(true);
+    expect(requestMock).toHaveBeenCalledTimes(1);
+    expect(requestMock).toHaveBeenCalledWith({
+      method: "POST",
+      url: "api/v1/gateway/containers/sandbox-1/stop",
+      data: {},
+    });
+  });
+
   test("does not prepare again when a prepared sandbox cannot be scheduled", async () => {
     const sandbox = new Sandbox({ name: "cached-sandbox" });
     const prepareMock = jest.spyOn(sandbox.stub, "prepareRuntime");

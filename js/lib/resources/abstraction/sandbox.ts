@@ -114,6 +114,16 @@ export class Sandbox extends Pod {
     );
   }
 
+  /** Terminate a sandbox by ID without connecting to it first. */
+  public static async terminate(id: string): Promise<boolean> {
+    const response = await beamClient.request({
+      method: "POST",
+      url: `api/v1/gateway/containers/${id}/stop`,
+      data: {},
+    });
+    return Boolean(response.data?.ok);
+  }
+
   /**
    * Create a sandbox instance from a filesystem snapshot.
    *
@@ -224,9 +234,6 @@ export class Sandbox extends Pod {
 
     const ignorePatterns = this.syncLocalDir ? undefined : ["*"];
 
-    // eslint-disable-next-line no-console
-    console.log("Creating sandbox");
-
     let body = await this.createContainer(
       this.stub.runtimeReady
         ? undefined
@@ -275,9 +282,6 @@ export class Sandbox extends Pod {
       );
     }
 
-    // eslint-disable-next-line no-console
-    console.log(`Sandbox created successfully ===> ${body.containerId}`);
-
     if (options?.waitForReady !== false) {
       const connectResp = await beamClient.request({
         method: "POST",
@@ -293,18 +297,6 @@ export class Sandbox extends Pod {
           connectData.errorMsg || "Failed to connect to sandbox",
         );
       }
-    }
-
-    if ((this.stub.config.keepWarmSeconds as number) < 0) {
-      // eslint-disable-next-line no-console
-      console.log(
-        "This sandbox has no timeout, it will run until it is shut down manually.",
-      );
-    } else {
-      // eslint-disable-next-line no-console
-      console.log(
-        `This sandbox will timeout after ${this.stub.config.keepWarmSeconds} seconds.`,
-      );
     }
 
     return new SandboxInstance(
@@ -484,7 +476,7 @@ export class SandboxInstance extends PodInstance {
    * Terminate the sandbox instance.
    */
   public async terminate(): Promise<boolean> {
-    const result = await super.terminate();
+    const result = await Sandbox.terminate(this.containerId);
     if (result) {
       this.terminated = true;
     }

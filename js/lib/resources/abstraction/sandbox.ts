@@ -25,6 +25,11 @@ export class SandboxFileSystemError extends Error {}
 /** Error thrown for sandbox process operations. */
 export class SandboxProcessError extends Error {}
 
+export interface SandboxCreateOptions {
+  entrypoint?: string[];
+  waitForReady?: boolean;
+}
+
 function shellQuote(arg: string): string {
   if (arg === "") return "''";
   // Simple POSIX single-quote escaping
@@ -204,7 +209,14 @@ export class Sandbox extends Pod {
    *
    * Throws: SandboxConnectionError if the sandbox creation fails.
    */
-  public async create(entrypoint?: string[]): Promise<SandboxInstance> {
+  public async create(
+    entrypointOrOptions?: string[] | SandboxCreateOptions,
+  ): Promise<SandboxInstance> {
+    const options = Array.isArray(entrypointOrOptions)
+      ? { entrypoint: entrypointOrOptions }
+      : entrypointOrOptions;
+    const entrypoint = options?.entrypoint;
+
     this.stub.config.entrypoint = ["tail", "-f", "/dev/null"];
     if (entrypoint && entrypoint.length) {
       this.stub.config.entrypoint = entrypoint;
@@ -266,20 +278,21 @@ export class Sandbox extends Pod {
     // eslint-disable-next-line no-console
     console.log(`Sandbox created successfully ===> ${body.containerId}`);
 
-    // Connect to the sandbox to ensure it's ready
-    const connectResp = await beamClient.request({
-      method: "POST",
-      url: `api/v1/gateway/pods/${body.containerId}/connect`,
-      data: {},
-    });
-    const connectData = connectResp.data as {
-      ok: boolean;
-      errorMsg?: string;
-    };
-    if (!connectData.ok) {
-      throw new SandboxConnectionError(
-        connectData.errorMsg || "Failed to connect to sandbox",
-      );
+    if (options?.waitForReady !== false) {
+      const connectResp = await beamClient.request({
+        method: "POST",
+        url: `api/v1/gateway/pods/${body.containerId}/connect`,
+        data: {},
+      });
+      const connectData = connectResp.data as {
+        ok: boolean;
+        errorMsg?: string;
+      };
+      if (!connectData.ok) {
+        throw new SandboxConnectionError(
+          connectData.errorMsg || "Failed to connect to sandbox",
+        );
+      }
     }
 
     if ((this.stub.config.keepWarmSeconds as number) < 0) {

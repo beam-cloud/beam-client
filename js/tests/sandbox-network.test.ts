@@ -101,6 +101,25 @@ describe("Sandbox network parity", () => {
     );
   });
 
+  test("can return before readiness when the next operation waits for it", async () => {
+    const requestMock = jest.spyOn(beamClient, "request").mockResolvedValue({
+      data: {
+        ok: true,
+        containerId: "sandbox-1",
+        stubId: "stub-cached",
+      },
+    });
+
+    await expect(
+      new Sandbox({ name: "cached-sandbox" }).create({ waitForReady: false })
+    ).resolves.toMatchObject({ containerId: "sandbox-1" });
+
+    expect(requestMock).toHaveBeenCalledTimes(1);
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({ url: "api/v1/gateway/pods" })
+    );
+  });
+
   test("does not prepare again when a prepared sandbox cannot be scheduled", async () => {
     const sandbox = new Sandbox({ name: "cached-sandbox" });
     const prepareMock = jest.spyOn(sandbox.stub, "prepareRuntime");

@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import { Pod, PodInstance } from "./pod";
+import { sandboxFileContentUrl } from "./sandbox-files";
 import { CreateStubConfig } from "./stub";
 import { EStubType } from "../../types/stub";
 import type {
@@ -1039,7 +1040,7 @@ export class SandboxFileSearchResult {
 /**
  * File system interface for managing files within a sandbox.
  *
- * Upload, download, stat, list, and manage files and directories.
+ * Upload, stat, list, and manage files and directories.
  */
 export class SandboxFileSystem {
   private sandbox_instance: SandboxInstance;
@@ -1092,32 +1093,18 @@ export class SandboxFileSystem {
     return this.writeBytes(sandboxPath, Buffer.from(content, "utf8"), mode);
   }
 
-  /** Download a file from the sandbox and return its bytes. */
-  public async download(sandboxPath: string): Promise<Buffer> {
-    return this.readBytes(sandboxPath);
-  }
-
-  /** Download a file from the sandbox to a local path. */
-  public async downloadFile(
-    sandboxPath: string,
-    localPath: string,
-  ): Promise<void> {
-    fs.writeFileSync(localPath, await this.readBytes(sandboxPath));
-  }
-
   /** Read a file from the sandbox as bytes. */
   public async readBytes(sandboxPath: string): Promise<Buffer> {
     const resp = await beamClient.request({
       method: "GET",
-      url: `api/v1/gateway/pods/${
-        this.sandbox_instance.containerId
-      }/files/download/${encodeURIComponent(sandboxPath)}`,
+      url: sandboxFileContentUrl(
+        this.sandbox_instance.containerId,
+        sandboxPath,
+      ),
     });
     const data = resp.data as { ok: boolean; errorMsg?: string; data?: string };
     if (!data.ok || !data.data)
-      throw new SandboxFileSystemError(
-        data.errorMsg || "Failed to download file",
-      );
+      throw new SandboxFileSystemError(data.errorMsg || "Failed to read file");
     return Buffer.from(data.data, "base64");
   }
 

@@ -1,4 +1,5 @@
 import beamClient from "../lib";
+import { Image } from "../lib/resources/abstraction/image";
 import { Sandbox, SandboxConnectionError, SandboxInstance } from "../lib/resources/abstraction/sandbox";
 import { EStubType } from "../lib/types/stub";
 
@@ -55,6 +56,151 @@ describe("Sandbox network parity", () => {
           block_network: false,
           allow_list: ["8.8.8.8/32"],
         }),
+      })
+    );
+  });
+
+  test("creates from a prepared stub without rebuilding or syncing", async () => {
+    const sandbox = new Sandbox({ name: "cached-sandbox" });
+    const buildMock = jest.spyOn(sandbox.stub.config.image, "build");
+    const syncMock = jest.spyOn(sandbox.stub.syncer, "sync");
+    const requestMock = jest
+      .spyOn(beamClient, "request")
+      .mockImplementation(async (config) => {
+        if (config.url?.endsWith("/connect")) {
+          return { data: { ok: true } };
+        }
+        return {
+          data: {
+            ok: true,
+            containerId: "sandbox-1",
+            stubId: "stub-cached",
+          },
+        };
+      });
+
+    await expect(sandbox.create()).resolves.toMatchObject({
+      containerId: "sandbox-1",
+      stubId: "stub-cached",
+    });
+
+    expect(sandbox.stub.stubId).toBe("stub-cached");
+    expect(buildMock).not.toHaveBeenCalled();
+    expect(syncMock).not.toHaveBeenCalled();
+    expect(requestMock).toHaveBeenCalledTimes(2);
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "POST",
+        url: "api/v1/gateway/pods",
+        data: {},
+        headers: {
+          "Grpc-Metadata-Preparation-Cache-Key": expect.stringMatching(
+            /^[0-9a-f]{64}$/
+          ),
+        },
+      })
+    );
+  });
+
+  test("uses distinct preparation keys for distinct images", () => {
+    const node = new Sandbox({ name: "image-key", image: "node:20" });
+    const python = new Sandbox({ name: "image-key", image: "python:3.12" });
+
+    expect(node.stub.config.image).toBeInstanceOf(Image);
+    expect(
+      node.stub.preparationCacheKey(EStubType.Sandbox, ["*"])
+    ).not.toBe(python.stub.preparationCacheKey(EStubType.Sandbox, ["*"]));
+  });
+
+  test("does not use a prepared stub when syncing local files", async () => {
+    const requestMock = jest.spyOn(beamClient, "request").mockResolvedValue({
+      data: { ok: true, containerId: "sandbox-1", stubId: "stub-1" },
+    });
+
+    await new Sandbox({ name: "synced-sandbox" }, true).create({
+      waitForReady: false,
+    });
+
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: "api/v1/gateway/pods",
+        headers: undefined,
+      })
+    );
+  });
+
+  test("can return before readiness when the next operation waits for it", async () => {
+    const requestMock = jest.spyOn(beamClient, "request").mockResolvedValue({
+      data: {
+        ok: true,
+        containerId: "sandbox-1",
+        stubId: "stub-cached",
+      },
+    });
+
+    await expect(
+      new Sandbox({ name: "cached-sandbox" }).create({ waitForReady: false })
+    ).resolves.toMatchObject({ containerId: "sandbox-1" });
+
+    expect(requestMock).toHaveBeenCalledTimes(1);
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({ url: "api/v1/gateway/pods" })
+    );
+  });
+
+  test("terminates by ID without connecting first", async () => {
+    const requestMock = jest.spyOn(beamClient, "request").mockResolvedValue({
+      data: { ok: true },
+    });
+
+    await expect(Sandbox.terminate("sandbox-1")).resolves.toBe(true);
+    expect(requestMock).toHaveBeenCalledTimes(1);
+    expect(requestMock).toHaveBeenCalledWith({
+      method: "POST",
+      url: "api/v1/gateway/containers/sandbox-1/stop",
+      data: {},
+    });
+  });
+
+  test("does not prepare again when a prepared sandbox cannot be scheduled", async () => {
+    const sandbox = new Sandbox({ name: "cached-sandbox" });
+    const prepareMock = jest.spyOn(sandbox.stub, "prepareRuntime");
+    jest.spyOn(beamClient, "request").mockResolvedValue({
+      data: {
+        ok: false,
+        errorMsg: "cpu quota exceeded",
+        stubId: "stub-cached",
+      },
+    });
+
+    await expect(sandbox.create()).rejects.toThrow("cpu quota exceeded");
+    expect(prepareMock).not.toHaveBeenCalled();
+  });
+
+  test("skips file sync for an ignored workspace and caches the stub", async () => {
+    const sandbox = new Sandbox({ name: "empty-workspace" });
+    sandbox.stub.imageAvailable = true;
+    sandbox.stub.config.image.id = "image-123";
+    const syncMock = jest.spyOn(sandbox.stub.syncer, "sync");
+    const requestMock = jest
+      .spyOn(beamClient, "request")
+      .mockResolvedValue({ data: { ok: true, stubId: "stub-new" } });
+
+    await expect(
+      sandbox.stub.prepareRuntime(undefined, EStubType.Sandbox, true, ["*"])
+    ).resolves.toBe(true);
+
+    expect(syncMock).not.toHaveBeenCalled();
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "POST",
+        url: "/api/v1/gateway/stubs",
+        data: expect.objectContaining({ object_id: "" }),
+        headers: {
+          "Grpc-Metadata-Preparation-Cache-Key": expect.stringMatching(
+            /^[0-9a-f]{64}$/
+          ),
+        },
       })
     );
   });
@@ -170,7 +316,11 @@ describe("Sandbox network parity", () => {
     const sandbox = new Sandbox({ name: "concurrent-sandbox" });
     let releasePreparation!: (prepared: boolean) => void;
     const preparation = new Promise<boolean>((resolve) => {
-      releasePreparation = resolve;
+      releasePreparation = (prepared) => {
+        sandbox.stub.stubId = "stub-1";
+        sandbox.stub.runtimeReady = prepared;
+        resolve(prepared);
+      };
     });
     const prepareRuntimeMock = jest
       .spyOn(sandbox.stub, "prepareRuntime")
@@ -180,6 +330,9 @@ describe("Sandbox network parity", () => {
       .spyOn(beamClient, "request")
       .mockImplementation(async (config) => {
         if (config.url === "api/v1/gateway/pods") {
+          if (!config.data?.stubId) {
+            return { data: { ok: false } };
+          }
           nextContainer += 1;
           return {
             data: {
@@ -197,6 +350,7 @@ describe("Sandbox network parity", () => {
     const firstCreate = sandbox.create();
     const secondCreate = sandbox.create();
 
+    await new Promise((resolve) => setImmediate(resolve));
     expect(prepareRuntimeMock).toHaveBeenCalledTimes(1);
     releasePreparation(true);
 
@@ -205,7 +359,7 @@ describe("Sandbox network parity", () => {
       "sandbox-1",
       "sandbox-2",
     ]);
-    expect(requestMock).toHaveBeenCalledTimes(4);
+    expect(requestMock).toHaveBeenCalledTimes(6);
   });
 
   test("returns inline exec results without follow-up requests", async () => {
@@ -290,8 +444,11 @@ describe("prepareRuntime surfaces real errors via lastError", () => {
   });
 
   test("file sync exception is surfaced in SandboxConnectionError", async () => {
-    const sandbox = new Sandbox({ name: "test-sandbox" });
+    const sandbox = new Sandbox({ name: "test-sandbox" }, true);
     sandbox.stub.imageAvailable = true;
+    jest.spyOn(beamClient, "request").mockResolvedValue({
+      data: { ok: false },
+    });
 
     jest
       .spyOn(sandbox.stub.syncer, "sync")

@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import { Pod, PodInstance } from "./pod";
+import { sandboxFileContentUrl } from "./sandbox-files";
 import { CreateStubConfig } from "./stub";
 import { EStubType } from "../../types/stub";
 import type {
@@ -24,6 +25,11 @@ export class SandboxConnectionError extends Error {}
 export class SandboxFileSystemError extends Error {}
 /** Error thrown for sandbox process operations. */
 export class SandboxProcessError extends Error {}
+
+export interface SandboxCreateOptions {
+  entrypoint?: string[];
+  waitForReady?: boolean;
+}
 
 function shellQuote(arg: string): string {
   if (arg === "") return "''";
@@ -109,6 +115,16 @@ export class Sandbox extends Pod {
     );
   }
 
+  /** Terminate a sandbox by ID without connecting to it first. */
+  public static async terminate(id: string): Promise<boolean> {
+    const response = await beamClient.request({
+      method: "POST",
+      url: `api/v1/gateway/containers/${id}/stop`,
+      data: {},
+    });
+    return Boolean(response.data?.ok);
+  }
+
   /**
    * Create a sandbox instance from a filesystem snapshot.
    *
@@ -175,6 +191,25 @@ export class Sandbox extends Pod {
     );
   }
 
+  private async createContainer(preparationCacheKey?: string): Promise<{
+    ok: boolean;
+    containerId: string;
+    errorMsg?: string;
+    stubId?: string;
+  }> {
+    const response = await beamClient.request({
+      method: "POST",
+      url: "api/v1/gateway/pods",
+      data: this.stub.stubId ? { stubId: this.stub.stubId } : {},
+      headers: preparationCacheKey
+        ? {
+            "Grpc-Metadata-Preparation-Cache-Key": preparationCacheKey,
+          }
+        : undefined,
+    });
+    return response.data;
+  }
+
   /**
    * Create a new sandbox instance.
    *
@@ -185,7 +220,14 @@ export class Sandbox extends Pod {
    *
    * Throws: SandboxConnectionError if the sandbox creation fails.
    */
-  public async create(entrypoint?: string[]): Promise<SandboxInstance> {
+  public async create(
+    entrypointOrOptions?: string[] | SandboxCreateOptions,
+  ): Promise<SandboxInstance> {
+    const options = Array.isArray(entrypointOrOptions)
+      ? { entrypoint: entrypointOrOptions }
+      : entrypointOrOptions;
+    const entrypoint = options?.entrypoint;
+
     this.stub.config.entrypoint = ["tail", "-f", "/dev/null"];
     if (entrypoint && entrypoint.length) {
       this.stub.config.entrypoint = entrypoint;
@@ -193,47 +235,47 @@ export class Sandbox extends Pod {
 
     const ignorePatterns = this.syncLocalDir ? undefined : ["*"];
 
-    if (!this.runtimePreparation) {
-      this.runtimePreparation = this.stub.prepareRuntime(
-        undefined,
-        EStubType.Sandbox,
-        true,
-        ignorePatterns,
-      );
+    const preparationCacheKey =
+      !this.syncLocalDir && !this.stub.runtimeReady
+        ? this.stub.preparationCacheKey(EStubType.Sandbox, ignorePatterns)
+        : undefined;
+    let body = await this.createContainer(preparationCacheKey);
+    if (body.ok && body.stubId) {
+      this.stub.stubCreated = true;
+      this.stub.stubId = body.stubId;
+      this.stub.runtimeReady = true;
     }
 
-    const currentPreparation = this.runtimePreparation;
-    let prepared: boolean;
-    try {
-      prepared = await currentPreparation;
-    } catch (error) {
-      if (this.runtimePreparation === currentPreparation) {
+    if (!body.ok && !body.stubId) {
+      if (!this.runtimePreparation) {
+        this.runtimePreparation = this.stub.prepareRuntime(
+          undefined,
+          EStubType.Sandbox,
+          true,
+          ignorePatterns,
+        );
+      }
+
+      const currentPreparation = this.runtimePreparation;
+      let prepared: boolean;
+      try {
+        prepared = await currentPreparation;
+      } catch (error) {
+        if (this.runtimePreparation === currentPreparation) {
+          this.runtimePreparation = undefined;
+        }
+        throw error;
+      }
+
+      if (!prepared && this.runtimePreparation === currentPreparation) {
         this.runtimePreparation = undefined;
       }
-      throw error;
+      if (!prepared) {
+        const detail = this.stub.lastError?.message ?? "unknown reason";
+        throw new SandboxConnectionError(`Failed to prepare runtime: ${detail}`);
+      }
+      body = await this.createContainer();
     }
-
-    if (!prepared && this.runtimePreparation === currentPreparation) {
-      this.runtimePreparation = undefined;
-    }
-    if (!prepared) {
-      const detail = this.stub.lastError?.message ?? "unknown reason";
-      throw new SandboxConnectionError(`Failed to prepare runtime: ${detail}`);
-    }
-
-    // eslint-disable-next-line no-console
-    console.log("Creating sandbox");
-
-    const createResp = await beamClient.request({
-      method: "POST",
-      url: `api/v1/gateway/pods`,
-      data: { stubId: this.stub.stubId },
-    });
-    const body = createResp.data as {
-      ok: boolean;
-      containerId: string;
-      errorMsg?: string;
-    };
 
     if (!body.ok) {
       throw new SandboxConnectionError(
@@ -241,35 +283,21 @@ export class Sandbox extends Pod {
       );
     }
 
-    // eslint-disable-next-line no-console
-    console.log(`Sandbox created successfully ===> ${body.containerId}`);
-
-    // Connect to the sandbox to ensure it's ready
-    const connectResp = await beamClient.request({
-      method: "POST",
-      url: `api/v1/gateway/pods/${body.containerId}/connect`,
-      data: {},
-    });
-    const connectData = connectResp.data as {
-      ok: boolean;
-      errorMsg?: string;
-    };
-    if (!connectData.ok) {
-      throw new SandboxConnectionError(
-        connectData.errorMsg || "Failed to connect to sandbox",
-      );
-    }
-
-    if ((this.stub.config.keepWarmSeconds as number) < 0) {
-      // eslint-disable-next-line no-console
-      console.log(
-        "This sandbox has no timeout, it will run until it is shut down manually.",
-      );
-    } else {
-      // eslint-disable-next-line no-console
-      console.log(
-        `This sandbox will timeout after ${this.stub.config.keepWarmSeconds} seconds.`,
-      );
+    if (options?.waitForReady !== false) {
+      const connectResp = await beamClient.request({
+        method: "POST",
+        url: `api/v1/gateway/pods/${body.containerId}/connect`,
+        data: {},
+      });
+      const connectData = connectResp.data as {
+        ok: boolean;
+        errorMsg?: string;
+      };
+      if (!connectData.ok) {
+        throw new SandboxConnectionError(
+          connectData.errorMsg || "Failed to connect to sandbox",
+        );
+      }
     }
 
     return new SandboxInstance(
@@ -449,7 +477,7 @@ export class SandboxInstance extends PodInstance {
    * Terminate the sandbox instance.
    */
   public async terminate(): Promise<boolean> {
-    const result = await super.terminate();
+    const result = await Sandbox.terminate(this.containerId);
     if (result) {
       this.terminated = true;
     }
@@ -1012,7 +1040,7 @@ export class SandboxFileSearchResult {
 /**
  * File system interface for managing files within a sandbox.
  *
- * Upload, download, stat, list, and manage files and directories.
+ * Upload, stat, list, and manage files and directories.
  */
 export class SandboxFileSystem {
   private sandbox_instance: SandboxInstance;
@@ -1065,32 +1093,18 @@ export class SandboxFileSystem {
     return this.writeBytes(sandboxPath, Buffer.from(content, "utf8"), mode);
   }
 
-  /** Download a file from the sandbox and return its bytes. */
-  public async download(sandboxPath: string): Promise<Buffer> {
-    return this.readBytes(sandboxPath);
-  }
-
-  /** Download a file from the sandbox to a local path. */
-  public async downloadFile(
-    sandboxPath: string,
-    localPath: string,
-  ): Promise<void> {
-    fs.writeFileSync(localPath, await this.readBytes(sandboxPath));
-  }
-
   /** Read a file from the sandbox as bytes. */
   public async readBytes(sandboxPath: string): Promise<Buffer> {
     const resp = await beamClient.request({
       method: "GET",
-      url: `api/v1/gateway/pods/${
-        this.sandbox_instance.containerId
-      }/files/download/${encodeURIComponent(sandboxPath)}`,
+      url: sandboxFileContentUrl(
+        this.sandbox_instance.containerId,
+        sandboxPath,
+      ),
     });
     const data = resp.data as { ok: boolean; errorMsg?: string; data?: string };
     if (!data.ok || !data.data)
-      throw new SandboxFileSystemError(
-        data.errorMsg || "Failed to download file",
-      );
+      throw new SandboxFileSystemError(data.errorMsg || "Failed to read file");
     return Buffer.from(data.data, "base64");
   }
 

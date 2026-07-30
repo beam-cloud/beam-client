@@ -1,4 +1,5 @@
 import * as path from "path";
+import { createHash } from "crypto";
 import beamClient, { GpuType, GpuTypeAlias } from "../..";
 import { Image } from "./image";
 import { Volume } from "../volume";
@@ -239,6 +240,8 @@ export class StubBuilder {
       return true;
     }
 
+    const preparationCacheKey = this.preparationCacheKey(stubType, ignorePatterns);
+
     // Build image if not available
     if (!this.imageAvailable) {
       try {
@@ -263,20 +266,25 @@ export class StubBuilder {
 
     // Sync files if not already synced
     if (!this.filesSynced) {
-      try {
-        const syncResult = await this.syncer.sync(ignorePatterns);
-        if (syncResult.success) {
-          this.filesSynced = true;
-          this.objectId = syncResult.objectId;
-        } else {
-          this.lastError = new Error("File sync failed");
-          console.error("File sync failed");
+      if (ignorePatterns?.length === 1 && ignorePatterns[0] === "*") {
+        this.filesSynced = true;
+        this.objectId = "";
+      } else {
+        try {
+          const syncResult = await this.syncer.sync(ignorePatterns);
+          if (syncResult.success) {
+            this.filesSynced = true;
+            this.objectId = syncResult.objectId;
+          } else {
+            this.lastError = new Error("File sync failed");
+            console.error("File sync failed");
+            return false;
+          }
+        } catch (error) {
+          this.lastError = error instanceof Error ? error : new Error(String(error));
+          console.error("File sync failed:", error);
           return false;
         }
-      } catch (error) {
-        this.lastError = error instanceof Error ? error : new Error(String(error));
-        console.error("File sync failed:", error);
-        return false;
       }
     }
 
@@ -372,6 +380,9 @@ export class StubBuilder {
             method: "POST",
             url: "/api/v1/gateway/stubs",
             data: camelCaseToSnakeCaseKeys(stubRequest),
+            headers: {
+              "Grpc-Metadata-Preparation-Cache-Key": preparationCacheKey,
+            },
           });
           stubResponse = response.data;
         } else {
@@ -392,6 +403,9 @@ export class StubBuilder {
               method: "POST",
               url: "/api/v1/gateway/stubs",
               data: camelCaseToSnakeCaseKeys(stubRequest),
+              headers: {
+                "Grpc-Metadata-Preparation-Cache-Key": preparationCacheKey,
+              },
             });
             stubResponse = response.data;
             setStubCreatedForWorkspace(true);
@@ -421,6 +435,26 @@ export class StubBuilder {
 
     this.runtimeReady = true;
     return true;
+  }
+
+  public preparationCacheKey(
+    stubType: string,
+    ignorePatterns?: string[]
+  ): string {
+    return createHash("sha256")
+      .update(
+        JSON.stringify({
+          stubType,
+          config: {
+            ...this.config,
+            image: this.config.image.config,
+            volumes: this.config.volumes.map((volume) => volume.export()),
+          },
+          extra: this.extra,
+          ignorePatterns,
+        }),
+      )
+      .digest("hex");
   }
 
   public async deployStub(

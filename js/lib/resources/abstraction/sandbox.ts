@@ -175,6 +175,25 @@ export class Sandbox extends Pod {
     );
   }
 
+  private async createContainer(preparationCacheKey?: string): Promise<{
+    ok: boolean;
+    containerId: string;
+    errorMsg?: string;
+    stubId?: string;
+  }> {
+    const response = await beamClient.request({
+      method: "POST",
+      url: "api/v1/gateway/pods",
+      data: this.stub.stubId ? { stubId: this.stub.stubId } : {},
+      headers: preparationCacheKey
+        ? {
+            "Grpc-Metadata-Preparation-Cache-Key": preparationCacheKey,
+          }
+        : undefined,
+    });
+    return response.data;
+  }
+
   /**
    * Create a new sandbox instance.
    *
@@ -193,47 +212,50 @@ export class Sandbox extends Pod {
 
     const ignorePatterns = this.syncLocalDir ? undefined : ["*"];
 
-    if (!this.runtimePreparation) {
-      this.runtimePreparation = this.stub.prepareRuntime(
-        undefined,
-        EStubType.Sandbox,
-        true,
-        ignorePatterns,
-      );
-    }
-
-    const currentPreparation = this.runtimePreparation;
-    let prepared: boolean;
-    try {
-      prepared = await currentPreparation;
-    } catch (error) {
-      if (this.runtimePreparation === currentPreparation) {
-        this.runtimePreparation = undefined;
-      }
-      throw error;
-    }
-
-    if (!prepared && this.runtimePreparation === currentPreparation) {
-      this.runtimePreparation = undefined;
-    }
-    if (!prepared) {
-      const detail = this.stub.lastError?.message ?? "unknown reason";
-      throw new SandboxConnectionError(`Failed to prepare runtime: ${detail}`);
-    }
-
     // eslint-disable-next-line no-console
     console.log("Creating sandbox");
 
-    const createResp = await beamClient.request({
-      method: "POST",
-      url: `api/v1/gateway/pods`,
-      data: { stubId: this.stub.stubId },
-    });
-    const body = createResp.data as {
-      ok: boolean;
-      containerId: string;
-      errorMsg?: string;
-    };
+    let body = await this.createContainer(
+      this.stub.runtimeReady
+        ? undefined
+        : this.stub.preparationCacheKey(EStubType.Sandbox, ignorePatterns),
+    );
+    if (body.ok && body.stubId) {
+      this.stub.stubCreated = true;
+      this.stub.stubId = body.stubId;
+      this.stub.runtimeReady = true;
+    }
+
+    if (!body.ok && !body.stubId) {
+      if (!this.runtimePreparation) {
+        this.runtimePreparation = this.stub.prepareRuntime(
+          undefined,
+          EStubType.Sandbox,
+          true,
+          ignorePatterns,
+        );
+      }
+
+      const currentPreparation = this.runtimePreparation;
+      let prepared: boolean;
+      try {
+        prepared = await currentPreparation;
+      } catch (error) {
+        if (this.runtimePreparation === currentPreparation) {
+          this.runtimePreparation = undefined;
+        }
+        throw error;
+      }
+
+      if (!prepared && this.runtimePreparation === currentPreparation) {
+        this.runtimePreparation = undefined;
+      }
+      if (!prepared) {
+        const detail = this.stub.lastError?.message ?? "unknown reason";
+        throw new SandboxConnectionError(`Failed to prepare runtime: ${detail}`);
+      }
+      body = await this.createContainer();
+    }
 
     if (!body.ok) {
       throw new SandboxConnectionError(

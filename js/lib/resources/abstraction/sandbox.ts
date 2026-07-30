@@ -234,11 +234,11 @@ export class Sandbox extends Pod {
 
     const ignorePatterns = this.syncLocalDir ? undefined : ["*"];
 
-    let body = await this.createContainer(
-      this.stub.runtimeReady
-        ? undefined
-        : this.stub.preparationCacheKey(EStubType.Sandbox, ignorePatterns),
-    );
+    const preparationCacheKey =
+      !this.syncLocalDir && !this.stub.runtimeReady
+        ? this.stub.preparationCacheKey(EStubType.Sandbox, ignorePatterns)
+        : undefined;
+    let body = await this.createContainer(preparationCacheKey);
     if (body.ok && body.stubId) {
       this.stub.stubCreated = true;
       this.stub.stubId = body.stubId;

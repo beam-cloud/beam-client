@@ -1,4 +1,5 @@
 import beamClient from "../lib";
+import { Image } from "../lib/resources/abstraction/image";
 import { Sandbox, SandboxConnectionError, SandboxInstance } from "../lib/resources/abstraction/sandbox";
 import { EStubType } from "../lib/types/stub";
 
@@ -97,6 +98,33 @@ describe("Sandbox network parity", () => {
             /^[0-9a-f]{64}$/
           ),
         },
+      })
+    );
+  });
+
+  test("uses distinct preparation keys for distinct images", () => {
+    const node = new Sandbox({ name: "image-key", image: "node:20" });
+    const python = new Sandbox({ name: "image-key", image: "python:3.12" });
+
+    expect(node.stub.config.image).toBeInstanceOf(Image);
+    expect(
+      node.stub.preparationCacheKey(EStubType.Sandbox, ["*"])
+    ).not.toBe(python.stub.preparationCacheKey(EStubType.Sandbox, ["*"]));
+  });
+
+  test("does not use a prepared stub when syncing local files", async () => {
+    const requestMock = jest.spyOn(beamClient, "request").mockResolvedValue({
+      data: { ok: true, containerId: "sandbox-1", stubId: "stub-1" },
+    });
+
+    await new Sandbox({ name: "synced-sandbox" }, true).create({
+      waitForReady: false,
+    });
+
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: "api/v1/gateway/pods",
+        headers: undefined,
       })
     );
   });

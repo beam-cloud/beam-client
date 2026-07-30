@@ -57,9 +57,10 @@ export interface StubConfig {
   allowList?: string[];
 }
 
-export interface CreateStubConfig extends Partial<StubConfig> {
+export type CreateStubConfig = Omit<Partial<StubConfig>, "image"> & {
   name: string;
-}
+  image?: Image | string;
+};
 
 // Global stub creation state management
 let _stubCreatedForWorkspace = false;
@@ -121,7 +122,8 @@ export class StubBuilder {
     this.config.name = name;
     this.config.app = app || name;
     this.config.authorized = authorized;
-    this.config.image = image || new Image({});
+    this.config.image =
+      typeof image === "string" ? Image.fromRegistry(image) : image || new Image({});
     this.config.callbackUrl = callbackUrl;
     this.config.cpu = cpu;
     this.config.memory = memory;
@@ -240,7 +242,10 @@ export class StubBuilder {
       return true;
     }
 
-    const preparationCacheKey = this.preparationCacheKey(stubType, ignorePatterns);
+    const preparationCacheKey =
+      ignorePatterns?.length === 1 && ignorePatterns[0] === "*"
+        ? this.preparationCacheKey(stubType, ignorePatterns)
+        : undefined;
 
     // Build image if not available
     if (!this.imageAvailable) {
@@ -380,9 +385,9 @@ export class StubBuilder {
             method: "POST",
             url: "/api/v1/gateway/stubs",
             data: camelCaseToSnakeCaseKeys(stubRequest),
-            headers: {
-              "Grpc-Metadata-Preparation-Cache-Key": preparationCacheKey,
-            },
+            headers: preparationCacheKey
+              ? { "Grpc-Metadata-Preparation-Cache-Key": preparationCacheKey }
+              : undefined,
           });
           stubResponse = response.data;
         } else {
@@ -403,9 +408,9 @@ export class StubBuilder {
               method: "POST",
               url: "/api/v1/gateway/stubs",
               data: camelCaseToSnakeCaseKeys(stubRequest),
-              headers: {
-                "Grpc-Metadata-Preparation-Cache-Key": preparationCacheKey,
-              },
+              headers: preparationCacheKey
+                ? { "Grpc-Metadata-Preparation-Cache-Key": preparationCacheKey }
+                : undefined,
             });
             stubResponse = response.data;
             setStubCreatedForWorkspace(true);
@@ -444,6 +449,7 @@ export class StubBuilder {
     return createHash("sha256")
       .update(
         JSON.stringify({
+          version: 1,
           stubType,
           config: {
             ...this.config,

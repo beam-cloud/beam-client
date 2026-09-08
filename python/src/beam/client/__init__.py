@@ -7,7 +7,6 @@ from beta9 import config
 
 @dataclass
 class SDKSettings(config.SDKSettings):
-    realtime_host: str = os.getenv("REALTIME_HOST", "wss://rt.beam.cloud")
     internal_api_host: str = os.getenv("INTERNAL_API_HOST", "api.beam.cloud")
     internal_api_port: int = int(os.getenv("INTERNAL_API_PORT", 443))
 

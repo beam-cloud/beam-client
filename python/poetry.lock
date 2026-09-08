@@ -123,14 +123,14 @@ typecheck = ["mypy"]
 
 [[package]]
 name = "beta9"
-version = "0.1.265"
+version = "0.1.266"
 description = ""
 optional = false
 python-versions = "<4.0,>=3.8"
 groups = ["main"]
 files = [
-    {file = "beta9-0.1.265-py3-none-any.whl", hash = "sha256:0625814e6e7c5c784fa3a4b8fe1eed2d8822d2d4ef21e202407d699bbb9e7904"},
-    {file = "beta9-0.1.265.tar.gz", hash = "sha256:6fa604fdfc9b8d76e986fc7ff0c91092da72cc11c55e502d1ed25b191c5c0510"},
+    {file = "beta9-0.1.266-py3-none-any.whl", hash = "sha256:f6b8f0cfd0aeb7ffc7b086cb7a634853fcbe6e7a4688502f3001c115f93ac7fe"},
+    {file = "beta9-0.1.266.tar.gz", hash = "sha256:747bb2787c0429cbaa6a2dc87015366e69ef90fdfc3587ee0e45641f3377f57a"},
 ]
 
 [package.dependencies]
@@ -144,7 +144,7 @@ grpcio = ">=1.69.0,<2.0.0"
 grpclib = ">=0.4.7,<1.0.0"
 paramiko = ">=3.5.0,<4.0.0"
 prompt-toolkit = ">=3.0.48,<4.0.0"
-protobuf = ">=4.25.1,<7.0.0"
+protobuf = ">=5.29.6,<7.0.0"
 pyyaml = ">=6.0.0,<7.0.0"
 requests = ">=2.32.3,<3.0.0"
 rich = ">=13.9.4,<15.0.0"
@@ -1714,4 +1714,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.8"
-content-hash = "fea00d66c514a711443b5cb344017e5fef79864ee3edaff4ba8a50eb842a4e97"
+content-hash = "048a1588067838fb1d912d65e20397120e897c2af2574ab31c6cdcabdc7131a1"

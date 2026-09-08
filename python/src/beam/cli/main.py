@@ -1,6 +1,5 @@
 import os
 import sys
-from dataclasses import dataclass
 from gettext import gettext as _
 from pathlib import Path
 
@@ -8,12 +7,7 @@ import click
 from beta9 import config
 from beta9.cli.main import load_cli
 
-from . import configure, example, login, logs, quickstart, utils
-
-
-@dataclass
-class SDKSettings(config.SDKSettings):
-    realtime_host: str = os.getenv("REALTIME_HOST", "wss://rt.beam.cloud")
+from . import configure, example, login, quickstart, utils
 
 
 # Check if the command is "configure" - skip config check for configure command
@@ -21,7 +15,7 @@ check_config = os.getenv("BEAM_TOKEN") is None and not (
     len(sys.argv) > 1 and sys.argv[1] == "configure"
 )
 
-settings = SDKSettings(
+settings = config.SDKSettings(
     name="Beam",
     api_host=os.getenv("API_HOST", "app.beam.cloud"),
     api_port=int(os.getenv("API_PORT", 443)),
@@ -37,7 +31,6 @@ cli = load_cli(settings=settings, check_config=check_config)
 cli.register(configure)
 cli.register(quickstart)
 cli.register(login)
-cli.register(logs)
 cli.register(example)
 cli.load_version("beam-client")
 
@@ -46,7 +39,8 @@ _cli = cli
 
 
 def cli():
-    utils.check_version()
+    if not any(arg in ("--help", "-h", "--help-all", "--version") for arg in sys.argv[1:]):
+        utils.check_version()
 
     try:
         if exit_code := _cli(standalone_mode=False):

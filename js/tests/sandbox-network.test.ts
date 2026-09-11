@@ -398,6 +398,65 @@ describe("Sandbox network parity", () => {
     );
   });
 
+  test("waits for exec results when the inline window expires", async () => {
+    let statusRequests = 0;
+    const requestMock = jest
+      .spyOn(beamClient, "request")
+      .mockImplementation(async (config) => {
+        if (config.url?.endsWith("/exec")) {
+          return {
+            data: {
+              ok: true,
+              pid: 9,
+              done: false,
+              exitCode: 0,
+              stdout: "",
+              stderr: "",
+            },
+          };
+        }
+        if (config.url?.endsWith("/status")) {
+          statusRequests += 1;
+          return statusRequests === 1
+            ? { data: { ok: true, exitCode: -1, status: "running" } }
+            : { data: { ok: true, exitCode: 0, status: "done" } };
+        }
+        if (config.url?.endsWith("/stdout")) {
+          return { data: { ok: true, stdout: "start\ndone\n" } };
+        }
+        if (config.url?.endsWith("/stderr")) {
+          return { data: { ok: true, stderr: "" } };
+        }
+        throw new Error(`Unexpected request: ${config.url}`);
+      });
+
+    const instance = new SandboxInstance(
+      {
+        containerId: "sandbox-123",
+        stubId: "stub-123",
+        url: "",
+        ok: true,
+        errorMsg: "",
+      },
+      new Sandbox({ name: "networked-sandbox" })
+    );
+
+    const process = await instance.exec(["sh", "-c", "sleep 2; echo done"], {
+      wait: true,
+    });
+
+    expect(process.exitCode).toBe(-1);
+    await expect(process.wait()).resolves.toBe(0);
+    await expect(process.stdout.read()).resolves.toBe("start\ndone\n");
+    await expect(process.stderr.read()).resolves.toBe("");
+    expect(statusRequests).toBe(2);
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: expect.stringMatching(/\/status$/),
+      })
+    );
+  });
+
   test("iterates inline combined logs without follow-up requests", async () => {
     const requestMock = jest.spyOn(beamClient, "request").mockResolvedValue({
       data: {

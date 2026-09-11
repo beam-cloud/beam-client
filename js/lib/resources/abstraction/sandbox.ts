@@ -791,8 +791,6 @@ export class SandboxProcess {
     this.cwd = info?.cwd ?? "";
     this.command = info?.command ?? "";
     this.env = info?.env ?? [];
-    this.exitCode = info?.exitCode ?? -1;
-    this.running = info?.running ?? this.exitCode < 0;
     if (info?.done) {
       this._inlineDone = true;
       this.exitCode = info.exitCode ?? 0;
@@ -800,6 +798,9 @@ export class SandboxProcess {
       this._status = "done";
       this._inlineStdout = info.stdout || "";
       this._inlineStderr = info.stderr || "";
+    } else if (info?.running !== undefined) {
+      this.running = info.running;
+      this.exitCode = info.running ? -1 : (info.exitCode ?? 0);
     }
   }
 

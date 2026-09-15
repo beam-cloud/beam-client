@@ -15,6 +15,7 @@ import {
 } from "../../types/image";
 import { camelCaseToSnakeCaseKeys } from "../../util";
 import beamClient from "../..";
+import axios from "axios";
 
 const DEFAULT_PYTHON_VERSION: PythonVersion = PythonVersion.Python3;
 const DEFAULT_IMAGE_BUILD_CACHE_TTL_MS = 300_000;
@@ -122,13 +123,24 @@ export class Image {
   ): Promise<AsyncIterable<BuildImageResponse>> {
     const apiRequest = this._transformRequestToSnakeCase(request);
 
-    const response = await beamClient.request({
-      method: "POST",
-      url: "/api/v1/gateway/images/build",
-      data: apiRequest,
-      responseType: "stream",
-      timeout: 600000,
-    });
+    let response;
+    try {
+      response = await beamClient.request({
+        method: "POST",
+        url: "/api/v1/gateway/images/build",
+        data: apiRequest,
+        responseType: "stream",
+        timeout: 600000,
+      });
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const stream = error.response?.data;
+        if (stream && typeof stream.destroy === "function") {
+          stream.destroy();
+        }
+      }
+      throw error;
+    }
 
     return this._createAsyncIterable(response);
   }

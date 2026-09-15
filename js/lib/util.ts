@@ -42,12 +42,17 @@ export const camelCaseToSnakeCaseKeys = (obj: any): any => {
   Object.keys(obj).forEach((key) => {
     const initialKey = String(key);
     const currentObject = obj[initialKey];
-    if (typeof currentObject === "object" && currentObject !== null) {
-      newObj[key.replace(/[A-Z]/g, (g) => `_${g.toLowerCase()}`)] =
-        camelCaseToSnakeCaseKeys(currentObject);
+    const transformedKey = key.replace(
+      /[A-Z]/g,
+      (g) => `_${g.toLowerCase()}`,
+    );
+    if (transformedKey === "existing_image_creds") {
+      // Credential names are workspace-secret identifiers, not API fields.
+      newObj[transformedKey] = currentObject;
+    } else if (typeof currentObject === "object" && currentObject !== null) {
+      newObj[transformedKey] = camelCaseToSnakeCaseKeys(currentObject);
     } else {
-      newObj[key.replace(/[A-Z]/g, (g) => `_${g.toLowerCase()}`)] =
-        currentObject;
+      newObj[transformedKey] = currentObject;
     }
   });
   return newObj;

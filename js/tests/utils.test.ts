@@ -200,6 +200,26 @@ describe("camelCaseToSnakeCaseKeys", () => {
     expect(camelCaseToSnakeCaseKeys(input2)).toEqual(expected2);
   });
 
+  test("preserves workspace secret names in existing image credentials", () => {
+    const input = {
+      existingImageUri: "registry.example.com/private/image:latest",
+      existingImageCreds: {
+        AWS_ACCESS_KEY_ID: "access-key",
+        AWS_SECRET_ACCESS_KEY: "secret-key",
+        AWS_REGION: "us-west-2",
+      },
+    };
+
+    expect(camelCaseToSnakeCaseKeys(input)).toEqual({
+      existing_image_uri: "registry.example.com/private/image:latest",
+      existing_image_creds: {
+        AWS_ACCESS_KEY_ID: "access-key",
+        AWS_SECRET_ACCESS_KEY: "secret-key",
+        AWS_REGION: "us-west-2",
+      },
+    });
+  });
+
   test("handles nested object is an array of objects", () => {
     const input = {
       camelKey: [{ nestedKey: "object" }, { nestedKey2: "object2" }],

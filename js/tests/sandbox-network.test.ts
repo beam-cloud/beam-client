@@ -114,6 +114,42 @@ describe("Sandbox network parity", () => {
     expect(requestMock).not.toHaveBeenCalled();
   });
 
+  test("can return before readiness when the caller will poll", async () => {
+    const requestMock = jest.spyOn(beamClient, "request").mockResolvedValue({
+      data: {
+        ok: true,
+        containerId: "sandbox-1",
+        stubId: "stub-cached",
+      },
+    });
+
+    const sandbox = new Sandbox({ name: "cached-sandbox" });
+    jest.spyOn(sandbox.stub, "prepareRuntime").mockResolvedValue(true);
+
+    await expect(sandbox.create({ waitForReady: false })).resolves.toMatchObject(
+      { containerId: "sandbox-1" }
+    );
+
+    expect(requestMock).toHaveBeenCalledTimes(1);
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({ url: "api/v1/gateway/pods" })
+    );
+  });
+
+  test("terminates by ID without connecting first", async () => {
+    const requestMock = jest.spyOn(beamClient, "request").mockResolvedValue({
+      data: { ok: true },
+    });
+
+    await expect(Sandbox.terminate("sandbox-1")).resolves.toBe(true);
+    expect(requestMock).toHaveBeenCalledTimes(1);
+    expect(requestMock).toHaveBeenCalledWith({
+      method: "POST",
+      url: "api/v1/gateway/containers/sandbox-1/stop",
+      data: {},
+    });
+  });
+
   test("rejects blockNetwork=true with empty allowList", async () => {
     const requestMock = jest.spyOn(beamClient, "request");
 

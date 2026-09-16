@@ -86,6 +86,7 @@ export {
   SandboxFileSystemError,
   SandboxProcessError,
 } from "./resources/abstraction/sandbox";
+export type { SandboxCreateOptions } from "./resources/abstraction/sandbox";
 
 // Export Image classes and types
 export { Image } from "./resources/abstraction/image";

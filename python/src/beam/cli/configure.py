@@ -1,7 +1,15 @@
+from dataclasses import replace
+
 import click
 from beta9 import terminal
 from beta9.cli.extraclick import ClickCommonGroup
-from beta9.config import DEFAULT_CONTEXT_NAME, ConfigContext, get_settings, load_config, save_config
+from beta9.config import (
+    DEFAULT_CONTEXT_NAME,
+    context_defaults,
+    get_settings,
+    load_config,
+    save_config,
+)
 
 
 def validate_token(ctx: click.Context, param: click.Parameter, value: str):
@@ -26,7 +34,7 @@ def common(**_):
 
         {cli_name} configure default --token MY_TOKEN
 
-        {cli_name} configure production --token MY_TOKEN
+        {cli_name} configure staging --token MY_STAGING_TOKEN
         \b
     """,
 )
@@ -71,12 +79,9 @@ def configure(token: str, name: str):
             name = new_name
             break
 
-    context = ConfigContext(
-        token=token, gateway_host=settings.gateway_host, gateway_port=settings.gateway_port
-    )
-
-    # Save context to config
-    contexts[name] = context
+    # A known name (an existing context, or an environment such as `staging`)
+    # keeps pointing where it did; a new one is production.
+    contexts[name] = replace(context_defaults(name), token=token)
     save_config(contexts=contexts, path=config_path)
 
     terminal.success(f"Added new context to {config_path}")

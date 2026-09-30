@@ -4,33 +4,63 @@ from gettext import gettext as _
 from pathlib import Path
 
 import click
-from beta9 import config
 from beta9.cli.main import load_cli
+from beta9.config import ConfigContext, SDKSettings
 
-from . import configure, example, login, quickstart, utils
+from . import configure, example, quickstart, utils
 
+
+def environment(domain: str) -> ConfigContext:
+    """The Beam cluster under `domain`: gateway.<domain>, app.<domain>, api.<domain>."""
+    return ConfigContext(
+        gateway_host=f"gateway.{domain}",
+        gateway_port=443,
+        api_url=f"https://app.{domain}",
+        auth_url=f"https://api.{domain}/v2/oauth",
+    )
+
+
+PRODUCTION = environment("beam.cloud")
 
 # Check if the command is "configure" - skip config check for configure command
 check_config = os.getenv("BEAM_TOKEN") is None and not (
     len(sys.argv) > 1 and sys.argv[1] == "configure"
 )
 
-settings = config.SDKSettings(
+# `beam` talks to production. `beam login --environment staging` (or `local`)
+# signs in elsewhere and saves a context of that name; `--context <name>` then
+# selects it on any command, `beam mcp install` included. beta9 still honours
+# API_HOST, GATEWAY_HOST, GATEWAY_PORT, BEAM_AUTH_URL and BEAM_TOKEN for the
+# default context (CI and containers).
+settings = SDKSettings(
     name="Beam",
-    api_host=os.getenv("API_HOST", "app.beam.cloud"),
-    api_port=int(os.getenv("API_PORT", 443)),
-    gateway_host=os.getenv("GATEWAY_HOST", "gateway.beam.cloud"),
-    gateway_port=int(os.getenv("GATEWAY_PORT", 443)),
+    api_host="app.beam.cloud",
+    api_port=443,
+    gateway_host=PRODUCTION.gateway_host,
+    gateway_port=443,
     config_path=Path("~/.beam/config.ini").expanduser(),
-    api_token=os.getenv("BEAM_TOKEN"),
     use_defaults_in_prompt=True,
+    auth_url=PRODUCTION.auth_url,
+    docs_url="https://docs.beam.cloud",
+    environments={
+        "staging": environment("stage.beam.cloud"),
+        # A gateway and account API on this machine (okteto port-forwards);
+        # edit [local] in ~/.beam/config.ini when yours listen elsewhere.
+        "local": ConfigContext(
+            gateway_host="127.0.0.1",
+            gateway_port=1993,
+            api_url="http://127.0.0.1:1994",
+            auth_url="http://127.0.0.1:8008/v2/oauth",
+        ),
+    },
 )
 
 
+# `login` comes from beta9 (OAuth device grant against each environment's
+# auth_url); the dashboard-callback login this package used to ship is retired.
 cli = load_cli(settings=settings, check_config=check_config)
 cli.register(configure)
 cli.register(quickstart)
-cli.register(login)
 cli.register(example)
 cli.load_version("beam-client")
 

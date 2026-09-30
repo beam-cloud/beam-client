@@ -87,6 +87,26 @@ Publish the JS package to npm after `npm login`:
 make publish-js
 ```
 
+### Environments
+
+`beam` talks to production. The CLI also knows `staging` and `local` by name;
+sign in to one and every command takes `--context <name>` from then on:
+
+```bash
+beam login                                  # production, saved as [default]
+beam login --environment staging            # saved as [staging]
+beam login --environment staging --name qa  # a second staging workspace
+beam --context staging deploy app.py
+beam mcp install --context staging          # agents talk to staging too
+```
+
+Credentials live in `~/.beam/config.ini`, one section per context with its
+gateway, API, and sign-in URLs, so `beam login --name <existing>` renews a
+context where it already points. `local` expects a gateway on `127.0.0.1:1993`
+and the account API on `127.0.0.1:8008`; edit the `[local]` section for other
+ports. `BEAM_TOKEN` (with `GATEWAY_HOST`, `API_HOST`, and `BEAM_AUTH_URL` for
+another cluster) still overrides the default context in CI and containers.
+
 ## Go SDK
 
 The Go module is `github.com/beam-cloud/beam-client/go`.

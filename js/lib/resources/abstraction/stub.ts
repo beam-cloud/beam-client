@@ -1,4 +1,5 @@
 import * as path from "path";
+import { createHash } from "crypto";
 import beamClient, { GpuType, GpuTypeAlias } from "../..";
 import { Image } from "./image";
 import { Volume } from "../volume";
@@ -239,6 +240,15 @@ export class StubBuilder {
       return true;
     }
 
+    // Build mutates the image config; register the identity a fresh client uses.
+    const preparationCacheKey = stubType === "sandbox" &&
+      ignorePatterns?.length === 1 && ignorePatterns[0] === "*"
+      ? this.preparationCacheKey(stubType, ignorePatterns)
+      : undefined;
+    const headers = preparationCacheKey
+      ? { "Grpc-Metadata-Preparation-Cache-Key": preparationCacheKey }
+      : undefined;
+
     // Build image if not available
     if (!this.imageAvailable) {
       try {
@@ -372,6 +382,7 @@ export class StubBuilder {
             method: "POST",
             url: "/api/v1/gateway/stubs",
             data: camelCaseToSnakeCaseKeys(stubRequest),
+            headers,
           });
           stubResponse = response.data;
         } else {
@@ -392,6 +403,7 @@ export class StubBuilder {
               method: "POST",
               url: "/api/v1/gateway/stubs",
               data: camelCaseToSnakeCaseKeys(stubRequest),
+              headers,
             });
             stubResponse = response.data;
             setStubCreatedForWorkspace(true);
@@ -421,6 +433,21 @@ export class StubBuilder {
 
     this.runtimeReady = true;
     return true;
+  }
+
+  public preparationCacheKey(stubType: string, ignorePatterns?: string[]): string {
+    // Keep the version and JSON layout compatible with published 1.0.18 keys.
+    return createHash("sha256").update(JSON.stringify({
+      version: 1,
+      stubType,
+      config: {
+        ...this.config,
+        image: this.config.image.config,
+        volumes: this.config.volumes.map((volume) => volume.export()),
+      },
+      extra: this.extra,
+      ignorePatterns,
+    })).digest("hex");
   }
 
   public async deployStub(

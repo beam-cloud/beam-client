@@ -14,6 +14,7 @@ import type {
   PodSandboxCreateDirectoryResponse,
   PodSandboxListUrlsResponse,
   PodInstanceData,
+  CreatePodResponse,
   ExecOptions,
 } from "../../types/pod";
 import beamClient from "../..";
@@ -214,53 +215,64 @@ export class Sandbox extends Pod {
     }
 
     const ignorePatterns = this.syncLocalDir ? undefined : ["*"];
+    const preparationCacheKey = !this.syncLocalDir && !this.stub.runtimeReady
+      ? this.stub.preparationCacheKey(EStubType.Sandbox, ignorePatterns)
+      : undefined;
+    let body: CreatePodResponse | undefined;
 
-    if (!this.runtimePreparation) {
-      this.runtimePreparation = this.stub.prepareRuntime(
-        undefined,
-        EStubType.Sandbox,
-        true,
-        ignorePatterns,
-      );
+    if (preparationCacheKey) {
+      body = await this.createContainer(preparationCacheKey);
+      // A missing prepared stub needs preparation. Admission and placement
+      // errors already have a stub and must not create another one.
+      const cacheMiss = !body.stubId &&
+        /^load stub [^:]*: (?:not found|sql: no rows in result set|pq: invalid input syntax for type uuid: "")$/.test(body.errorMsg ?? "");
+      if (!body.ok && !cacheMiss) {
+        throw new SandboxConnectionError(body.errorMsg || "Failed to create sandbox");
+      }
     }
 
-    const currentPreparation = this.runtimePreparation;
-    let prepared: boolean;
-    try {
-      prepared = await currentPreparation;
-    } catch (error) {
-      if (this.runtimePreparation === currentPreparation) {
+    if (!body?.ok) {
+      if (!this.runtimePreparation) {
+        this.runtimePreparation = this.stub.prepareRuntime(
+          undefined,
+          EStubType.Sandbox,
+          true,
+          ignorePatterns,
+        );
+      }
+
+      const currentPreparation = this.runtimePreparation;
+      let prepared: boolean;
+      try {
+        prepared = await currentPreparation;
+      } catch (error) {
+        if (this.runtimePreparation === currentPreparation) {
+          this.runtimePreparation = undefined;
+        }
+        throw error;
+      }
+
+      if (!prepared && this.runtimePreparation === currentPreparation) {
         this.runtimePreparation = undefined;
       }
-      throw error;
-    }
+      if (!prepared) {
+        const detail = this.stub.lastError?.message ?? "unknown reason";
+        throw new SandboxConnectionError(`Failed to prepare runtime: ${detail}`);
+      }
 
-    if (!prepared && this.runtimePreparation === currentPreparation) {
-      this.runtimePreparation = undefined;
+      body = await this.createContainer();
     }
-    if (!prepared) {
-      const detail = this.stub.lastError?.message ?? "unknown reason";
-      throw new SandboxConnectionError(`Failed to prepare runtime: ${detail}`);
-    }
-
-    // eslint-disable-next-line no-console
-    console.log("Creating sandbox");
-
-    const createResp = await beamClient.request({
-      method: "POST",
-      url: `api/v1/gateway/pods`,
-      data: { stubId: this.stub.stubId },
-    });
-    const body = createResp.data as {
-      ok: boolean;
-      containerId: string;
-      errorMsg?: string;
-    };
 
     if (!body.ok) {
       throw new SandboxConnectionError(
         body.errorMsg || "Failed to create sandbox",
       );
+    }
+
+    if (body.stubId) {
+      this.stub.stubId = body.stubId;
+      this.stub.stubCreated = true;
+      this.stub.runtimeReady = true;
     }
 
     // eslint-disable-next-line no-console
@@ -306,6 +318,18 @@ export class Sandbox extends Pod {
       },
       this,
     );
+  }
+
+  private async createContainer(preparationCacheKey?: string): Promise<CreatePodResponse> {
+    const response = await beamClient.request({
+      method: "POST",
+      url: "api/v1/gateway/pods",
+      data: this.stub.stubId ? { stubId: this.stub.stubId } : {},
+      headers: preparationCacheKey
+        ? { "Grpc-Metadata-Preparation-Cache-Key": preparationCacheKey }
+        : undefined,
+    });
+    return response.data;
   }
 }
 

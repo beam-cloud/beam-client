@@ -203,7 +203,7 @@ describe("Sandbox network parity", () => {
   });
 
   test("shares runtime preparation across concurrent sandbox creates", async () => {
-    const sandbox = new Sandbox({ name: "concurrent-sandbox" });
+    const sandbox = new Sandbox({ name: "concurrent-sandbox" }, true);
     let releasePreparation!: (prepared: boolean) => void;
     const preparation = new Promise<boolean>((resolve) => {
       releasePreparation = resolve;
@@ -326,7 +326,7 @@ describe("prepareRuntime surfaces real errors via lastError", () => {
   });
 
   test("file sync exception is surfaced in SandboxConnectionError", async () => {
-    const sandbox = new Sandbox({ name: "test-sandbox" });
+    const sandbox = new Sandbox({ name: "test-sandbox" }, true);
     sandbox.stub.imageAvailable = true;
 
     jest
@@ -344,9 +344,11 @@ describe("prepareRuntime surfaces real errors via lastError", () => {
     sandbox.stub.objectId = "object-123";
     sandbox.stub.config.image.id = "image-123";
 
-    jest.spyOn(beamClient, "request").mockResolvedValue({
-      data: { ok: false, errMsg: "Workspace quota exceeded" },
-    });
+    jest.spyOn(beamClient, "request").mockImplementation(async (request) => ({
+      data: request.url === "/api/v1/gateway/stubs"
+        ? { ok: false, errMsg: "Workspace quota exceeded" }
+        : { ok: false, errorMsg: "load stub : not found" },
+    }));
 
     await expect(sandbox.create()).rejects.toThrow(SandboxConnectionError);
     await expect(sandbox.create()).rejects.toThrow(/Workspace quota exceeded/);

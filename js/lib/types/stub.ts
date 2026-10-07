@@ -74,6 +74,7 @@ export interface GetOrCreateStubRequest {
   tcp: boolean;
   blockNetwork: boolean;
   allowList?: string[];
+  dockerEnabled: boolean;
 }
 
 export interface GetOrCreateStubResponse {

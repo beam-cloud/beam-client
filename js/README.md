@@ -102,15 +102,52 @@ console.log(restored.sandboxId);
 
 ## Docker
 
-Docker-enabled Beam sandboxes can run Docker commands through `execShell`.
+Install Docker in the image and enable the managed daemon explicitly:
 
 ```typescript
-const proc = await sb.execShell("docker run --rm alpine:3.20 echo hello");
-await proc.wait();
-console.log(await proc.stdout.read());
+const sandbox = new Sandbox({
+  name: "docker-actions",
+  image: Image.fromRegistry("node:20-slim").withDocker(),
+  dockerEnabled: true,
+  cpu: 2,
+  memory: "2Gi",
+  keepWarmSeconds: 300,
+});
+
+const sb = await sandbox.create();
+try {
+  const ready = await sb.exec([
+    "timeout", "60", "sh", "-c",
+    "until docker info >/dev/null 2>&1; do sleep 1; done",
+  ]);
+  if (await ready.wait() !== 0) throw new Error("Docker daemon did not become ready");
+  const proc = await sb.exec([
+    "docker", "run", "--rm", "--network=host", "--pid=host",
+    "alpine:3.20", "echo", "hello",
+  ], { wait: true });
+  if (await proc.wait() !== 0) throw new Error(await proc.stderr.read());
+  console.log(await proc.stdout.read());
+} finally {
+  await sb.terminate();
+}
 ```
 
-For Docker Compose, write or upload a compose file and run `docker compose`.
+`withDocker()` supports Ubuntu and Debian images and installs Docker Engine,
+CLI, Buildx, `docker compose`, and the `docker-compose` alias. Other base images
+must provide their own Docker installation. No host Docker socket is mounted.
+
+Run Docker commands through `sb.exec` or `sb.execShell`; a separate Python-style
+`sb.docker` wrapper is not required. The daemon starts asynchronously: wait for
+`docker info` to succeed before issuing builds or running containers.
+
+The managed daemon uses VFS storage and no default bridge under runc/gVisor.
+Use `--network=host --pid=host` for inner containers; these share the sandbox's
+namespaces, not the worker machine's. For Compose, configure each service with
+`network_mode: host` and `pid: host`. Use `docker compose -f /path/compose.yaml up`
+and `down` through `exec`; Compose files are not automatically rewritten.
+Build with `docker build --network=host -t my-image /path/to/context`; otherwise
+Dockerfile `RUN` instructions fail with `network bridge not found`, even when
+the instruction does not access the network.
 
 ## Volumes and Cloud Buckets
 

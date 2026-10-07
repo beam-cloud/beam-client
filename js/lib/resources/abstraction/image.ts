@@ -20,6 +20,25 @@ import axios from "axios";
 const DEFAULT_PYTHON_VERSION: PythonVersion = PythonVersion.Python3;
 const DEFAULT_IMAGE_BUILD_CACHE_TTL_MS = 300_000;
 
+// Image commands become Dockerfile RUN instructions and must stay on one line.
+const DOCKER_INSTALL_COMMAND = [
+  "set -eu",
+  ". /etc/os-release",
+  'case "$ID" in ubuntu|debian) ;; *) echo "Image.withDocker() requires an Ubuntu or Debian base image (got $ID)" >&2; exit 1 ;; esac',
+  "export DEBIAN_FRONTEND=noninteractive",
+  "apt-get update",
+  "apt-get install -y --no-install-recommends ca-certificates curl",
+  "install -m 0755 -d /etc/apt/keyrings",
+  'curl -fsSL "https://download.docker.com/linux/$ID/gpg" -o /etc/apt/keyrings/docker.asc',
+  "chmod a+r /etc/apt/keyrings/docker.asc",
+  `printf 'deb [arch=%s signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/%s %s stable\\n' "$(dpkg --print-architecture)" "$ID" "\${UBUNTU_CODENAME:-\${VERSION_CODENAME}}" > /etc/apt/sources.list.d/docker.list`,
+  "apt-get update",
+  "apt-get install -y --no-install-recommends docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin",
+  "ln -sf /usr/libexec/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose",
+  "docker --version && docker compose version && docker-compose version && docker buildx version",
+  "apt-get clean && rm -rf /var/lib/apt/lists/*",
+].join(" && ");
+
 type ImageBuildCacheEntry = {
   result: ImageBuildResult;
   expiresAt: number;
@@ -562,6 +581,17 @@ export class Image {
    */
   buildWithGpu(gpu: GpuType): Image {
     this.config.gpu = gpu;
+    return this;
+  }
+
+  /**
+   * Install Docker Engine, CLI, Buildx and Compose on Ubuntu or Debian.
+   * Pair with `dockerEnabled: true` to start the managed daemon at runtime.
+   */
+  withDocker(): Image {
+    if (!this.config.commands.includes(DOCKER_INSTALL_COMMAND)) {
+      this.config.commands = [...this.config.commands, DOCKER_INSTALL_COMMAND];
+    }
     return this;
   }
 

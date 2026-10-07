@@ -63,6 +63,8 @@ function shellQuote(arg: string): string {
  *   `allowList`.
  * - allowList (string[]): CIDR ranges that are allowed for outbound network access. When specified,
  *   all other outbound traffic is blocked.
+ * - dockerEnabled (boolean): Start the managed Docker daemon. Defaults to false; pair with
+ *   `Image.withDocker()` or an image that already contains Docker.
  * - authorized (boolean): Ignored for sandboxes (forced to false).
  */
 export class Sandbox extends Pod {

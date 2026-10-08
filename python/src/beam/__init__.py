@@ -5,7 +5,6 @@ from beta9 import (
     BotLocation,
     DatabaseServingConfig,
     DurableDisk,
-    VM,
     ImageBuildError,
     Pool,
     RemoteExecutionError,
@@ -49,6 +48,16 @@ from beta9.client.task import Task
 from beta9.type import GpuType, PythonVersion, QueueDepthAutoscaler
 
 from .client.client import Client
+
+
+def __getattr__(name):
+    if name == "VM":
+        from beta9 import VM
+
+        globals()[name] = VM
+        return VM
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     "Map",

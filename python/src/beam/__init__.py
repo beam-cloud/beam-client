@@ -1,3 +1,4 @@
+import beta9
 from beta9 import (
     Bot,
     BotContext,
@@ -48,6 +49,14 @@ from beta9.client.task import Task
 from beta9.type import GpuType, PythonVersion, QueueDepthAutoscaler
 
 from .client.client import Client
+
+
+def __getattr__(name):
+    if name == "VM" and hasattr(beta9, "VM"):
+        globals()[name] = beta9.VM
+        return beta9.VM
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     "Map",
@@ -104,3 +113,6 @@ __all__ = [
     "SandboxFileSearchMatch",
     "SandboxFileSearchRange",
 ]
+
+if hasattr(beta9, "VM"):
+    __all__.append("VM")

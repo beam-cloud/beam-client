@@ -1,3 +1,4 @@
+import beta9
 from beta9 import (
     Bot,
     BotContext,
@@ -51,11 +52,9 @@ from .client.client import Client
 
 
 def __getattr__(name):
-    if name == "VM":
-        from beta9 import VM
-
-        globals()[name] = VM
-        return VM
+    if name == "VM" and hasattr(beta9, "VM"):
+        globals()[name] = beta9.VM
+        return beta9.VM
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -80,7 +79,6 @@ __all__ = [
     "experimental",
     "DatabaseServingConfig",
     "DurableDisk",
-    "VM",
     "ImageBuildError",
     "Pool",
     "RemoteExecutionError",
@@ -115,3 +113,6 @@ __all__ = [
     "SandboxFileSearchMatch",
     "SandboxFileSearchRange",
 ]
+
+if hasattr(beta9, "VM"):
+    __all__.append("VM")

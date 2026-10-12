@@ -7,7 +7,7 @@ Every factory returns the same `VM` class.
 Install the SDK and configure a server-side Beam token:
 
 ```bash
-npm install @beamcloud/beam-js@1.1.3
+npm install @beamcloud/beam-js@1.1.4
 export BEAM_TOKEN=YOUR_BEAM_TOKEN
 ```
 

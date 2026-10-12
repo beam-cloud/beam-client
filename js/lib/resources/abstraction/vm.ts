@@ -906,7 +906,15 @@ export class VM extends VMAccess {
     ];
     if (!opts.background)
       return this.exec(argv, { cwd: opts.cwd || "/workspace", env: opts.env });
+    // Exec is ready before systemd's control socket during a fresh boot.
+    // Keep prompt arguments literal and bound the guest launcher while it waits.
     const process = await this.exec([
+      "timeout",
+      "30s",
+      "bash",
+      "-c",
+      'until systemctl show --property=Version >/dev/null 2>&1; do sleep 0.1; done; exec "$@"',
+      "beam-prompt-service",
       "systemd-run",
       "--collect",
       `--unit=${session}`,
@@ -916,9 +924,13 @@ export class VM extends VMAccess {
       ),
       ...argv,
     ]);
-    if ((await process.wait({ timeoutMs: 30_000 })) !== 0)
+    const exitCode = await process.wait({ timeoutMs: 45_000 });
+    if (exitCode !== 0)
       throw new VMError(
-        (await process.stderr.read()) || "Failed to launch prompt service",
+        (await process.stderr.read()) ||
+          (exitCode === 124
+            ? "VM systemd did not become ready for background prompts before timeout"
+            : "Failed to launch prompt service"),
       );
     return { session, unit: `${session}.service` };
   }

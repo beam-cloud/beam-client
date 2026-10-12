@@ -19,9 +19,9 @@ An invalid provider credential fails that inference check; it does not prevent
 the other VM capability checks from running.
 
 ```bash
-npm install --prefix /tmp/beam-sdk-registry @beamcloud/beam-js@1.1.3 --ignore-scripts
+npm install --prefix /tmp/beam-sdk-registry @beamcloud/beam-js@1.1.4 --ignore-scripts
 export BEAM_VM_PACKAGE=/tmp/beam-sdk-registry/node_modules/@beamcloud/beam-js
-export BEAM_VM_EXPECT_VERSION=1.1.3
+export BEAM_VM_EXPECT_VERSION=1.1.4
 # Select a Python executable with the current Beam SDK and grpc installed.
 export BEAM_VM_FIXTURE_PYTHON=/absolute/path/to/python3
 npm run test:e2e:vm:production
@@ -90,3 +90,8 @@ Version 1.1.3 ports the VM feature onto the current `beam-client/js` SDK.
 The canonical dependencies, Docker installer, file synchronization and published
 sandbox cache identity are preserved. Builds and releases originate from the
 `js` directory of `beam-cloud/beam-client`.
+
+Version 1.1.4 waits for the guest systemd control socket before launching a
+background prompt, so it works immediately after exec-ready creation. Production
+coverage includes a real background Claude reply using an injected workspace
+secret, followed by session and systemd unit log retrieval.

@@ -86,7 +86,7 @@ s.close()
     if (!published || !process.env.BEAM_TOKEN)
       throw new Error("BEAM_VM_PACKAGE and BEAM_TOKEN are required");
     expect(require(`${published}/package.json`).version).toBe(
-      process.env.BEAM_VM_EXPECT_VERSION || "1.1.3",
+      process.env.BEAM_VM_EXPECT_VERSION || "1.1.4",
     );
     Object.assign(beamOpts, {
       token: process.env.BEAM_TOKEN,
@@ -156,6 +156,39 @@ s.close()
       expect((await VM.templates.list({ vmId: vm.id })).length).toBe(0);
     }
     expect(failures).toEqual([]);
+  });
+
+  test("real background Claude immediately after exec-ready creation", async () => {
+    await vm.stop({ noSnapshot: true });
+    const agentVM: VMType = new VM({
+      name: `js-bg-${tag}`,
+      cpu: 1,
+      memory: "512Mi",
+      diskSize: "1Gi",
+      ssh: false,
+      secrets: ["ANTHROPIC_API_KEY"],
+      idleTimeout: 0,
+      metadata: { production_test: tag },
+    });
+    children.push(agentVM);
+    try {
+      // Do not wait for services: the launcher must handle the early boot race.
+      await agentVM.create();
+      const session = await agentVM.prompt(
+        "Compute 17 multiplied by 19. Reply with only the number.",
+        { agent: "claude", background: true },
+      );
+      expect(session.unit).toBe(`${session.session}.service`);
+      await eventually(async () => {
+        const logs = await agentVM.logs({ session: session.session });
+        expect(await logs.read()).toMatch(/^323\s*$/m);
+      }, 120_000);
+      const journal = await agentVM.logs({ unit: session.unit });
+      expect(await journal.read()).toContain("323");
+      console.log("Real background Claude from an exec-ready VM verified.");
+    } finally {
+      await agentVM.remove();
+    }
   });
 
   test("prepare, idempotent create, factories, filters, configuration, metadata and both module formats", async () => {

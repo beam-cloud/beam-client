@@ -15,7 +15,7 @@ import { formatBytes, uploadToPresignedUrl } from "./util";
 import axios from "axios";
 import ignore from "ignore";
 import { ZipFile } from "yazl";
-import beamClient from "./index";
+import beamClient from "./client";
 
 // Global workspace object id to signal to any other threads that the workspace has already been synced
 let _workspaceObjectId = "";

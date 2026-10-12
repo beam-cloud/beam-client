@@ -11,7 +11,7 @@ import {
   DeployStubRequest,
   DeployStubResponse,
 } from "../../types/stub";
-import beamClient from "../..";
+import beamClient from "../../client";
 
 // TODO: Temp fix until common.py is implemented
 let USER_CODE_DIR = "/mnt/code";

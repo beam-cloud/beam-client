@@ -2,7 +2,7 @@ import { AxiosResponse } from "axios";
 import { DeploymentData } from "../types/deployment";
 import APIResource, { ResourceObject } from "./base";
 import { EStubType } from "../types/stub";
-import { beamOpts } from "../index";
+import { beamOpts } from "../client";
 
 export interface ListDeploymentsOptions {
   stubType?: EStubType;

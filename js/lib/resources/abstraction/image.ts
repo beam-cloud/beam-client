@@ -14,7 +14,7 @@ import {
   ImageCredentialValueNotFound,
 } from "../../types/image";
 import { camelCaseToSnakeCaseKeys } from "../../util";
-import beamClient from "../..";
+import beamClient from "../../client";
 import axios from "axios";
 
 const DEFAULT_PYTHON_VERSION: PythonVersion = PythonVersion.Python3;
@@ -84,6 +84,8 @@ export class Image {
     this.config.pythonPackages = this._sanitizePythonPackages(pythonPackages);
 
     this.config.commands = commands;
+    // Keep plain-image configs identical for existing prepared-runtime cache keys.
+    if (buildSteps.length) this.config.buildSteps = buildSteps;
     this.config.baseImage = baseImage;
     this.config.baseImageCreds = this._processCredentials(baseImageCreds);
     this.config.envVars = envVars;
@@ -321,6 +323,7 @@ export class Image {
       pythonVersion: this.config.pythonVersion,
       commands: this.config.commands,
       forceRebuild: false,
+      buildSteps: this.config.buildSteps,
       existingImageUri: this.config.baseImage,
       envVars: this._processEnvVars(this.config.envVars),
       dockerfile: this.config.dockerfile,
@@ -373,6 +376,7 @@ export class Image {
     }
 
     const request: BuildImageRequest = {
+      buildSteps: this.config.buildSteps,
       pythonPackages: Array.isArray(this.config.pythonPackages)
         ? this.config.pythonPackages
         : [this.config.pythonPackages],

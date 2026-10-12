@@ -1,6 +1,7 @@
 import * as path from "path";
 import { createHash } from "crypto";
-import beamClient, { GpuType, GpuTypeAlias } from "../..";
+import beamClient from "../../client";
+import { GpuType, GpuTypeAlias } from "../../types/common";
 import { Image } from "./image";
 import { Volume } from "../volume";
 import { FileSyncer } from "../../sync";

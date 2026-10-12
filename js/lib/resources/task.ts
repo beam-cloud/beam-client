@@ -1,6 +1,6 @@
 import APIResource, { ResourceObject } from "./base";
 import { TaskData } from "../types/task";
-import beamClient, { beamOpts } from "../index";
+import beamClient, { beamOpts } from "../client";
 
 class Tasks extends APIResource<Task, TaskData> {
   public object: string = "task";

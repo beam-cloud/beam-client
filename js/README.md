@@ -25,6 +25,43 @@ beamOpts.workspaceId = process.env.BEAM_WORKSPACE_ID!;
 
 The SDK targets Beam Cloud by default.
 
+## Virtual machines
+
+
+Create a durable Linux VM, run commands, snapshot its root, and fork it:
+
+```typescript
+import { beamOpts, VM } from "@beamcloud/beam-js";
+
+beamOpts.token = process.env.BEAM_TOKEN!;
+const vm = await VM.create({
+  name: "agent-workspace",
+  cpu: 1,
+  memory: "2Gi",
+  protectedPorts: [7681],
+  idleTimeout: 300,
+  idleAction: "pause",
+  autoResume: true,
+});
+const command = await vm.exec(["node", "--version"]);
+await command.wait();
+console.log(await command.stdout.read());
+
+const snapshot = await vm.snapshots.create("ready");
+const branch = await snapshot.fork({ name: "experiment", memory: "512Mi" });
+await branch.remove();
+await snapshot.delete();
+await vm.pause();
+await vm.close();
+// Later: await VM.connect(vm.id); to delete: await vm.remove().
+```
+
+One `VM` object exposes lifecycle, snapshots/templates, files, Docker, desktop
+controls, private tunnels, SSH/SCP, directory sync, prompts, logs and metrics.
+See the [VM guide and complete API/parity map](docs/virtual-machines.md).
+For a runnable JavaScript workflow with cleanup, see
+[the agent workspace example](examples/vm-agent-workspace.mjs).
+
 ## Sandbox Quickstart
 
 Create a sandbox, run code, stream logs, and terminate it cleanly.

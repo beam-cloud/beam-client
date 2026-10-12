@@ -17,7 +17,7 @@ import type {
   CreatePodResponse,
   ExecOptions,
 } from "../../types/pod";
-import beamClient from "../..";
+import beamClient from "../../client";
 
 /** Error thrown when connecting to a sandbox fails. */
 export class SandboxConnectionError extends Error {}
@@ -862,12 +862,13 @@ export class SandboxProcess {
   }
 
   /** Get the status of the process: [exitCode, status]. */
-  public async status(): Promise<[number, string]> {
+  public async status(opts: { timeoutMs?: number; signal?: AbortSignal } = {}): Promise<[number, string]> {
     const resp = await beamClient.request({
       method: "GET",
       url: `api/v1/gateway/pods/${this.sandbox_instance.containerId}/status`,
       params: { pid: this.pid },
-      timeout: 300000,
+      timeout: opts.timeoutMs ?? 300000,
+      signal: opts.signal,
     });
     const data = resp.data as {
       ok: boolean;

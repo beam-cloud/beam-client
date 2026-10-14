@@ -78,7 +78,10 @@ describe("Persistent VM contract", () => {
       .spyOn(Image.prototype, "build")
       .mockResolvedValue({ success: true, imageId: "vm-image" });
     request.mockImplementation(async (config) => ({
-      data: config.method === "GET" ? [] : raw({ exec_ready: true }),
+      data:
+        config.method === "GET"
+          ? []
+          : raw({ exec_ready: true, public_ipv6: "2001:db8::123" }),
     }));
     const config = {
       name: "test-vm",
@@ -94,6 +97,7 @@ describe("Persistent VM contract", () => {
     };
     const vm = new VM(config);
     await vm.create();
+    expect(vm.publicIpv6).toBe("2001:db8::123");
     config.env.API_KEY = "changed";
     await vm.create();
     const posts = request.mock.calls
@@ -115,6 +119,45 @@ describe("Persistent VM contract", () => {
       },
     });
     expect(Image.prototype.build).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([undefined, "2001:db8::123"])(
+    "publicIpv6 decodes the API address %s without fetching again",
+    async (publicIpv6) => {
+      request.mockResolvedValueOnce({
+        data: raw(publicIpv6 ? { public_ipv6: publicIpv6 } : {}),
+      });
+      const vm = await VM.get("test-vm");
+      expect(vm.info.publicIpv6).toBe(publicIpv6);
+      expect(vm.publicIpv6).toBe(publicIpv6);
+      expect(request).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  test("publicIpv6 remains available across pause and start responses", async () => {
+    const publicIpv6 = "2001:db8::123";
+    request
+      .mockResolvedValueOnce({ data: raw({ public_ipv6: publicIpv6 }) })
+      .mockResolvedValueOnce({
+        data: raw({
+          public_ipv6: publicIpv6,
+          status: "paused",
+          container_id: undefined,
+        }),
+      })
+      .mockResolvedValueOnce({
+        data: raw({
+          public_ipv6: publicIpv6,
+          container_id: "boot-2",
+          generation: 2,
+        }),
+      });
+    const vm = await VM.get("test-vm");
+    await vm.pause();
+    expect(vm.publicIpv6).toBe(publicIpv6);
+    await vm.start({ wait: false });
+    expect(vm.publicIpv6).toBe(publicIpv6);
+    expect(vm.containerId).toBe("boot-2");
   });
 
   test("concurrent creates on one object share image preparation and submission", async () => {

@@ -133,6 +133,7 @@ export interface VMInfo {
   id: string;
   name: string;
   handle: string;
+  publicIpv6?: string;
   metadata?: Record<string, string>;
   spec: VMSpec;
   stubId?: string;

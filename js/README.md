@@ -43,6 +43,7 @@ const vm = await VM.create({
   idleAction: "pause",
   autoResume: true,
 });
+console.log(vm.publicIpv6); // Persistent IPv6 address, when public networking is enabled.
 const command = await vm.exec(["node", "--version"]);
 await command.wait();
 console.log(await command.stdout.read());

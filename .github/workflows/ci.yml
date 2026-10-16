@@ -36,7 +36,10 @@ jobs:
 
   python:
     name: Python package
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -61,6 +64,16 @@ jobs:
       - name: Build wheel
         working-directory: python
         run: python -m build --wheel
+
+      - name: Verify installed wheel
+        working-directory: python
+        run: |
+          python -m venv "$RUNNER_TEMP/beam-package"
+          "$RUNNER_TEMP/beam-package/bin/python" -m pip install dist/*.whl
+          "$RUNNER_TEMP/beam-package/bin/python" -m pip check
+          "$RUNNER_TEMP/beam-package/bin/python" -c 'import sys; from beam import VM, Image, Client; assert "beta9.abstractions.experimental" not in sys.modules'
+          "$RUNNER_TEMP/beam-package/bin/beam" --version
+          "$RUNNER_TEMP/beam-package/bin/beam" vm list --help
 
   js:
     name: TypeScript/JavaScript SDK

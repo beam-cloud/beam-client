@@ -1,6 +1,7 @@
 import os
 import sys
 from importlib import metadata
+from pathlib import Path
 
 import click
 import requests
@@ -26,9 +27,11 @@ def check_version():
     if current_version >= minimum_version:
         return
 
-    # Use the interpreter that is running the Beam CLI. A bare `pip` executable
-    # may belong to a different Python installation, leaving this CLI unchanged.
-    upgrade_command = f'"{sys.executable}" -m pip install --upgrade beam-client'
+    # uv owns its tool environments; do not recommend mutating one with pip.
+    if (Path(sys.prefix) / "uv-receipt.toml").is_file():
+        upgrade_command = "uv tool upgrade beam-client"
+    else:
+        upgrade_command = f'"{sys.executable}" -m pip install --upgrade beam-client'
 
     click.echo(
         (

@@ -1,9 +1,5 @@
 import beta9
 from beta9 import (
-    Bot,
-    BotContext,
-    BotEventType,
-    BotLocation,
     DatabaseServingConfig,
     DurableDisk,
     ImageBuildError,
@@ -30,7 +26,6 @@ from beta9 import (
     env,
     schema,
 )
-from beta9.abstractions import experimental
 from beta9.abstractions.base.container import Container
 from beta9.abstractions.endpoint import ASGI as asgi
 from beta9.abstractions.endpoint import Endpoint as endpoint
@@ -76,7 +71,6 @@ __all__ = [
     "GpuType",
     "Output",
     "QueueDepthAutoscaler",
-    "experimental",
     "DatabaseServingConfig",
     "DurableDisk",
     "ImageBuildError",
@@ -88,10 +82,6 @@ __all__ = [
     "TaskPolicy",
     "schedule",
     "integrations",
-    "Bot",
-    "BotContext",
-    "BotEventType",
-    "BotLocation",
     "Pod",
     "PodInstance",
     "Client",

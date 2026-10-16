@@ -163,8 +163,8 @@ optional = false
 python-versions = "<4.0,>=3.8"
 groups = ["main"]
 files = [
-    {file = "beta9-0.1.291-py3-none-any.whl", hash = "sha256:13cb06c00fcdc08afc33f247bd6ac8a37113b11f38914efcea0c03a66bf9901c"},
-    {file = "beta9-0.1.291.tar.gz", hash = "sha256:ffa75879e68f48584b190efb61c23d23e6861fa68926b111432aeba44094048e"},
+    {file = "beta9-0.1.291-py3-none-any.whl", hash = "sha256:22fea7d269df893b69b030a9941436ef39d12043f51ec3b7977ec9b5dc925c0a"},
+    {file = "beta9-0.1.291.tar.gz", hash = "sha256:884133f4367060eed2fd6d4724b17cd53026ac85a4bbf69e5dae4f82cad9bac5"},
 ]
 
 [package.dependencies]

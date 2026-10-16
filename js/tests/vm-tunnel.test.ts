@@ -2,6 +2,8 @@ import WebSocket, { WebSocketServer } from "ws";
 import type { AddressInfo } from "net";
 import { once } from "events";
 import { VMTunnel } from "../lib/resources/abstraction/vm-tunnel";
+import { VM } from "../lib/resources/abstraction/vm";
+import { Duplex } from "stream";
 import { beamOpts } from "../lib";
 
 function fromBytes(bytes: Buffer): string {
@@ -115,4 +117,51 @@ test("an aborted tunnel cancels connection establishment", async () => {
   });
   tunnel.on("error", () => {});
   await expect(tunnel.ready).rejects.toThrow("Tunnel aborted");
+});
+
+
+test("SSH waits for a greeting and retries early closure without sending client input", async () => {
+  const streams: Duplex[] = [];
+  const open = jest.spyOn(VMTunnel, "open").mockImplementation(async () => {
+    const stream = new Duplex({ read() {}, write(_chunk, _encoding, callback) { callback(new Error("no client input expected")); } });
+    (stream as any).close = () => stream.destroy();
+    streams.push(stream);
+    if (streams.length === 1) setImmediate(() => stream.destroy());
+    else setImmediate(() => stream.push(Buffer.from("SSH-2.0-test\r\n")));
+    return stream as VMTunnel;
+  });
+  const vm = new VM({ ssh: true });
+  jest.spyOn(vm, "runtime").mockResolvedValue({ containerId: "runtime" } as any);
+  jest.spyOn(vm, "wait").mockResolvedValue(vm);
+  Object.defineProperty(vm, "info", { value: { id: "vm-test", spec: { ssh: true } } });
+  try {
+    const tunnel = await vm.tunnel(2222, { timeoutMs: 1000 });
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(tunnel.read().toString()).toBe("SSH-2.0-test\r\n");
+    tunnel.destroy();
+  } finally {
+    for (const stream of streams) stream.destroy();
+    jest.restoreAllMocks();
+  }
+});
+
+test("aborting SSH greeting readiness closes the tunnel without retrying", async () => {
+  const controller = new AbortController();
+  const stream = new Duplex({ read() {}, write(_chunk, _encoding, callback) { callback(); } });
+  (stream as any).close = () => stream.destroy();
+  const open = jest.spyOn(VMTunnel, "open").mockResolvedValue(stream as VMTunnel);
+  const vm = new VM({ ssh: true });
+  jest.spyOn(vm, "runtime").mockResolvedValue({ containerId: "runtime" } as any);
+  jest.spyOn(vm, "wait").mockResolvedValue(vm);
+  Object.defineProperty(vm, "info", { value: { id: "vm-test", spec: { ssh: true } } });
+  try {
+    const pending = vm.tunnel(2222, { signal: controller.signal });
+    setImmediate(() => controller.abort());
+    await expect(pending).rejects.toThrow(/abort/i);
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(stream.destroyed).toBe(true);
+  } finally {
+    stream.destroy();
+    jest.restoreAllMocks();
+  }
 });

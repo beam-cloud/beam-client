@@ -160,6 +160,23 @@ describe("Persistent VM contract", () => {
     expect(vm.containerId).toBe("boot-2");
   });
 
+  test("default VM creation builds pinned Ubuntu 24.04 with desktop services", async () => {
+    const bases: string[] = [];
+    jest.spyOn(Image.prototype, "build").mockImplementation(async function () {
+      bases.push(this.config.baseImage);
+      expect(this.config.buildSteps[0].command).toContain("install true");
+      return { success: true, imageId: "noble-image" };
+    });
+    request.mockImplementation(async (config) => ({
+      data: config.method === "GET" ? [] : raw({ exec_ready: true }),
+    }));
+    await new VM({ ssh: false, desktop: true }).create();
+    expect(bases).toEqual([
+      "ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55",
+    ]);
+    expect(request.mock.calls.find(([config]) => config.method === "POST")[0].data.spec.image_id).toBe("noble-image");
+  });
+
   test("concurrent creates on one object share image preparation and submission", async () => {
     jest
       .spyOn(Image.prototype, "build")

@@ -57,6 +57,12 @@ await vm.close();
 // Later: await VM.connect(vm.id); to delete: await vm.remove().
 ```
 
+VMs default to digest-pinned Ubuntu 24.04, 4 CPUs, 8 GiB RAM and a 50 GiB
+writable root. Desktop is opt-in (`desktop: true`, minimum 1 GiB RAM); Docker
+requires `dockerEnabled: true`. Creation waits for guest commands. Use
+`await vm.wait({ services: true })` for SSH, terminal and enabled desktop;
+Docker helpers wait for the daemon separately.
+
 One `VM` object exposes lifecycle, snapshots/templates, files, Docker, desktop
 controls, private tunnels, SSH/SCP, directory sync, prompts, logs and metrics.
 See the [VM guide and complete API/parity map](docs/virtual-machines.md).

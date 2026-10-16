@@ -24,8 +24,42 @@ import type {
   VMTunnelOptions,
   VMWaitOptions,
 } from "../../types/vm";
-import { checkAbort, quote, VMError } from "./vm-api";
+import { checkAbort, delay, quote, VMError } from "./vm-api";
 import { VMTunnel } from "./vm-tunnel";
+
+// A listening SSH socket can still reject startup bursts before sending its
+// greeting. Wait without consuming bytes or sending any client input, so retry
+// is safe and can never repeat a remote command.
+function sshGreeting(
+  tunnel: VMTunnel,
+  timeout: number,
+  signal?: AbortSignal,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const done = (error?: Error) => {
+      clearTimeout(timer);
+      tunnel.removeListener("readable", readable);
+      tunnel.removeListener("close", closed);
+      tunnel.removeListener("error", failed);
+      signal?.removeEventListener("abort", aborted);
+      error ? reject(error) : resolve();
+    };
+    const readable = () => {
+      if (tunnel.readableLength) done();
+    };
+    const closed = () => done(new VMError("SSH closed before its greeting"));
+    const failed = (error: Error) => done(error);
+    const aborted = () => done(new VMError("SSH tunnel aborted"));
+    const timer = setTimeout(() => done(new VMError("SSH greeting timed out")), timeout);
+    tunnel.on("readable", readable);
+    tunnel.once("close", closed);
+    tunnel.once("error", failed);
+    signal?.addEventListener("abort", aborted, { once: true });
+    if (signal?.aborted) aborted();
+    else if (tunnel.destroyed) closed();
+    else readable();
+  });
+}
 
 function run(
   program: string,
@@ -156,7 +190,28 @@ export abstract class VMAccess {
       if (!this.info.spec.ssh) throw new VMError("SSH is disabled for this VM");
       await this.wait({ ...opts, services: true });
     } else await this.bind(port);
-    const tunnel = await VMTunnel.open(this.id, port, opts);
+    const deadline = Date.now() + (opts.timeoutMs ?? 30_000);
+    let tunnel: VMTunnel;
+    while (true) {
+      checkAbort(opts.signal);
+      tunnel = await VMTunnel.open(
+        this.id,
+        port,
+        port === 2222
+          ? { ...opts, timeoutMs: Math.max(1, deadline - Date.now()) }
+          : opts,
+      );
+      if (port !== 2222) break;
+      try {
+        await sshGreeting(tunnel, Math.max(1, deadline - Date.now()), opts.signal);
+        break;
+      } catch (error) {
+        tunnel.close();
+        checkAbort(opts.signal);
+        if (Date.now() >= deadline) throw error;
+        await delay(Math.min(100, deadline - Date.now()), opts.signal);
+      }
+    }
     this.local.add(tunnel);
     tunnel.once("close", () => this.local.delete(tunnel));
     return tunnel;

@@ -31,6 +31,8 @@
     autoconnect: '1', resize: 'remote', reconnect: 'true', video_quality: '3',
     // The frame already renders at 2x; Kasm's native-density mode would scale it again.
     enable_hidpi: 'false', anti_aliasing: '1', framerate: '60', framerate_image_mode: '60',
+    // Avoid Kasm 1.5 selecting a CPU-heavy video encoder for an interactive desktop.
+    kasmvnc_mode_preference: 'image',
     enable_perf_stats: 'false',
     enable_webp: 'true', clipboard_up: 'true', clipboard_down: 'true', clipboard_seamless: 'true',
     // Kasm defaults to /websockify, which loses a gateway path prefix.
@@ -59,11 +61,35 @@
     }, delay);
   };
   const connect = () => {
+    clearTimeout(timer);
     showLoading(attempts ? 'Reconnecting to desktop…' : 'Connecting to desktop…');
     button.hidden = true;
-    // Recover stalled handshakes and error pages that cannot emit client events.
-    retry(30000);
-    desktop.src = client.href;
+    const deadline = Date.now() + 180000;
+    const wait = async () => {
+      try {
+        const response = await fetch(client.href, { cache: 'no-store', signal: AbortSignal.timeout(5000) });
+        if (connected) return;
+        if (response.ok) {
+          // Recover stalled handshakes and clients that cannot emit events.
+          retry(30000);
+          desktop.src = client.href;
+          return;
+        }
+        if ([401, 403, 404].includes(response.status)) {
+          showLoading('Reopen the desktop to check your access.');
+          button.hidden = false;
+          return;
+        }
+      } catch (_) { /* Retry transient failures while the desktop starts. */ }
+      if (Date.now() >= deadline) {
+        showLoading('The desktop is taking longer to start. Try again.');
+        button.hidden = false;
+        return;
+      }
+      showLoading('Starting desktop…');
+      timer = setTimeout(wait, 1000);
+    };
+    wait();
   };
   button.addEventListener('click', () => { attempts = 0; connect(); });
   window.addEventListener('message', ({origin, source, data}) => {

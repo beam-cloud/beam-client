@@ -71,6 +71,7 @@ jobs:
           python -m venv "$RUNNER_TEMP/beam-package"
           "$RUNNER_TEMP/beam-package/bin/python" -m pip install dist/*.whl
           "$RUNNER_TEMP/beam-package/bin/python" -m pip check
+          "$RUNNER_TEMP/beam-package/bin/python" -c 'import sys; from beam import VM, Image, Client; assert "beta9.abstractions.experimental" not in sys.modules'
           "$RUNNER_TEMP/beam-package/bin/beam" --version
           "$RUNNER_TEMP/beam-package/bin/beam" vm list --help
 

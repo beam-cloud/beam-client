@@ -1,6 +1,6 @@
 {
   "name": "@beamcloud/beam-js",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "TypeScript and JavaScript SDK for Beam",
   "main": "dist/index.js",
   "module": "dist/index.mjs",

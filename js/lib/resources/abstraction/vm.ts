@@ -33,7 +33,7 @@ import {
   vmRequest,
 } from "./vm-api";
 import { VMArtifact, VMArtifacts } from "./vm-artifacts";
-import { prepareVMImage } from "./vm-image";
+import { DEFAULT_VM_BASE_IMAGE, prepareVMImage } from "./vm-image";
 import {
   VMFileSystem,
   VMProcess,
@@ -348,7 +348,7 @@ export class VM extends VMAccess {
     if (!c.template && !c.snapshot) {
       spec.ssh = c.ssh ?? true;
       const image = await prepareVMImage(
-        c.image || Image.fromRegistry("ubuntu:22.04"),
+        c.image || Image.fromRegistry(DEFAULT_VM_BASE_IMAGE),
         c.desktop,
       );
       const result = await image.build();

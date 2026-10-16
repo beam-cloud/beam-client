@@ -191,6 +191,9 @@ export class VM extends VMAccess {
   get containerId(): string | undefined {
     return this.info.containerId;
   }
+  get publicIpv6(): string | undefined {
+    return this.info.publicIpv6;
+  }
   get terminalUrl(): string | undefined {
     return this.info.terminalUrl;
   }

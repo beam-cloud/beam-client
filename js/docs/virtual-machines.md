@@ -46,11 +46,16 @@ next session; `vm.remove()` deletes it. For a plain JavaScript workflow that
 also checkpoints, forks, reconnects and cleans up, see
 [the runnable agent workspace example](../examples/vm-agent-workspace.mjs).
 
-`new VM(config).create()` is equivalent. The default image is Ubuntu 22.04,
+`new VM(config).create()` is equivalent. The default image is digest-pinned Ubuntu 24.04,
 with 4 CPU cores, 8192 MiB of RAM and a 50 GiB writable root. VMs are CPU-only;
 GPU and unknown configuration fields are rejected. If `workspaceId` is omitted,
 the SDK resolves the token's current workspace. Set it explicitly when selecting
 a workspace. Authentication and gateway settings use the existing `beamOpts`.
+
+Desktop is opt-in (`desktop: true`) and requires at least 1 GiB RAM; Docker
+requires `dockerEnabled: true`. The CLI includes a desktop when building a
+fresh image. Existing roots, snapshots, templates and prebuilt image IDs keep
+their OS and settings; stop/start does not upgrade them.
 
 ## Find, connect and manage lifecycle
 
@@ -78,6 +83,14 @@ await ready.remove(); // delete VM and its managed root
 
 `create`, `start`, `resume`, `connect` and `fork` wait for exec readiness by
 default. Pass `{ wait: false }` to return after submission, then call `wait()`.
+Exec readiness means guest commands can run while systemd services are still
+starting. Use `await vm.wait({ services: true })` for SSH, the browser terminal
+and an enabled desktop; desktop helpers wait automatically. Docker helpers
+wait for the daemon separately; `services: true` does not wait for Docker or
+your own application services. Raw exec/SSH needs a successful `docker info`
+check before Docker commands. Image builds, worker cache misses, scheduling
+and network requests can take longer than a second.
+
 Startup/wait deadlines use `timeoutMs`; `signal` accepts an `AbortSignal`.
 Management results are cached on the object; call `refresh()` to read current
 state. `get()` and `list()` do not wake sleeping VMs. Guest operations wake them
@@ -252,7 +265,7 @@ await custom.docker.exec(["ps"]);
 ```
 
 Registry images and Dockerfiles receive the same VM services as Python. They
-require Debian/Ubuntu with apt; desktop images currently require Ubuntu 22.04.
+require Debian/Ubuntu with apt; desktop images support Ubuntu 24.04 and 22.04.
 Prebuilt IDs must already contain those services. `Image` supports build steps,
 build secrets, registry credentials and Dockerfile contexts as usual. Additional
 disks use ext4/qcow; workspace volumes persist independently of the VM. Source
@@ -299,6 +312,12 @@ the CLI's `~/.beam/ssh/vm_ed25519` identity; private keys stay local. Provide
 `{ sshKeyPath }` to use it when reattaching. Every local handle can be closed
 explicitly or through `vm.close()`.
 
+Brokered-secret clients with a custom trust store must trust
+`/etc/beam/ca-certificates.crt`. Nested Docker containers need that bundle
+mounted and configured explicitly. Managed browser trust is prepared before
+desktop startup and Chrome launches, separately from exec readiness, while
+preserving customer-installed roots.
+
 ## Desktop controls
 
 `vm.desktop` supports `screenshot(localPath?)`, `screenSize()`,
@@ -308,7 +327,7 @@ explicitly or through `vm.close()`.
 
 ```ts
 await vm.desktop.press("ctrl+l");
-await vm.desktop.write("https://example.com\n");
+await vm.desktop.write("https://example.com");
 await vm.desktop.press("Return");
 const recording = await vm.desktop.record("/workspace/screen.mp4", { fps: 30 });
 await vm.desktop.stopRecording(recording);

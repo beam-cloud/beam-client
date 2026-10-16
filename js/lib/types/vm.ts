@@ -28,6 +28,7 @@ export interface VMDisk {
 /** CPU-only persistent machine configuration. Omitted fields inherit a seed's configuration. */
 export interface VMConfig {
   name?: string;
+  /** Fresh VMs default to digest-pinned Ubuntu 24.04. */
   image?: Image;
   /** CPU cores, or millicores such as "1000m". Default: 4 cores. */
   cpu?: number | string;
@@ -35,7 +36,9 @@ export interface VMConfig {
   memory?: number | string;
   /** Writable root capacity, 1–100 GiB. Default: "50Gi". */
   diskSize?: string;
+  /** Opt-in desktop; requires at least 1024 MiB RAM and a supported Ubuntu image. */
   desktop?: boolean;
+  /** Start the installed Docker daemon; disabled by default. Docker helpers wait for it. */
   dockerEnabled?: boolean;
   env?: Record<string, string> | string[];
   secrets?: (string | { name: string })[];
@@ -67,7 +70,7 @@ export interface VMConfig {
 export interface VMWaitOptions {
   /** Operation deadline in milliseconds. Default: 180000. */
   timeoutMs?: number;
-  /** Also wait for terminal, SSH and desktop services. */
+  /** Also wait for terminal, SSH and desktop services; Docker and app services wait separately. */
   services?: boolean;
   signal?: AbortSignal;
 }

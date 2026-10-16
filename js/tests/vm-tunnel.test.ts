@@ -144,3 +144,24 @@ test("SSH waits for a greeting and retries early closure without sending client 
     jest.restoreAllMocks();
   }
 });
+
+test("aborting SSH greeting readiness closes the tunnel without retrying", async () => {
+  const controller = new AbortController();
+  const stream = new Duplex({ read() {}, write(_chunk, _encoding, callback) { callback(); } });
+  (stream as any).close = () => stream.destroy();
+  const open = jest.spyOn(VMTunnel, "open").mockResolvedValue(stream as VMTunnel);
+  const vm = new VM({ ssh: true });
+  jest.spyOn(vm, "runtime").mockResolvedValue({ containerId: "runtime" } as any);
+  jest.spyOn(vm, "wait").mockResolvedValue(vm);
+  Object.defineProperty(vm, "info", { value: { id: "vm-test", spec: { ssh: true } } });
+  try {
+    const pending = vm.tunnel(2222, { signal: controller.signal });
+    setImmediate(() => controller.abort());
+    await expect(pending).rejects.toThrow(/abort/i);
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(stream.destroyed).toBe(true);
+  } finally {
+    stream.destroy();
+    jest.restoreAllMocks();
+  }
+});

@@ -30,7 +30,11 @@ import { VMTunnel } from "./vm-tunnel";
 // A listening SSH socket can still reject startup bursts before sending its
 // greeting. Wait without consuming bytes or sending any client input, so retry
 // is safe and can never repeat a remote command.
-function sshGreeting(tunnel: VMTunnel, timeout: number, signal?: AbortSignal): Promise<void> {
+function sshGreeting(
+  tunnel: VMTunnel,
+  timeout: number,
+  signal?: AbortSignal,
+): Promise<void> {
   return new Promise((resolve, reject) => {
     const done = (error?: Error) => {
       clearTimeout(timer);
@@ -40,7 +44,9 @@ function sshGreeting(tunnel: VMTunnel, timeout: number, signal?: AbortSignal): P
       signal?.removeEventListener("abort", aborted);
       error ? reject(error) : resolve();
     };
-    const readable = () => { if (tunnel.readableLength) done(); };
+    const readable = () => {
+      if (tunnel.readableLength) done();
+    };
     const closed = () => done(new VMError("SSH closed before its greeting"));
     const failed = (error: Error) => done(error);
     const aborted = () => done(new VMError("SSH tunnel aborted"));
@@ -188,9 +194,13 @@ export abstract class VMAccess {
     let tunnel: VMTunnel;
     while (true) {
       checkAbort(opts.signal);
-      tunnel = await VMTunnel.open(this.id, port, port === 2222
-        ? { ...opts, timeoutMs: Math.max(1, deadline - Date.now()) }
-        : opts);
+      tunnel = await VMTunnel.open(
+        this.id,
+        port,
+        port === 2222
+          ? { ...opts, timeoutMs: Math.max(1, deadline - Date.now()) }
+          : opts,
+      );
       if (port !== 2222) break;
       try {
         await sshGreeting(tunnel, Math.max(1, deadline - Date.now()), opts.signal);

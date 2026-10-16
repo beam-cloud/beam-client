@@ -1,61 +1,8 @@
+"""Beam SDK exports, loaded only when an application uses them."""
+
+from importlib import import_module
+
 import beta9
-from beta9 import (
-    Bot,
-    BotContext,
-    BotEventType,
-    BotLocation,
-    DatabaseServingConfig,
-    DurableDisk,
-    ImageBuildError,
-    Pool,
-    RemoteExecutionError,
-    Sandbox,
-    SandboxConnectionError,
-    SandboxFileInfo,
-    SandboxFilePosition,
-    SandboxFileSearchMatch,
-    SandboxFileSearchRange,
-    SandboxFileSearchResult,
-    SandboxFileSystem,
-    SandboxFileSystemError,
-    SandboxInstance,
-    SandboxProcess,
-    SandboxProcessError,
-    SandboxProcessManager,
-    SandboxProcessResponse,
-    SandboxProcessStream,
-    Service,
-    ServingConfig,
-    TaskPolicy,
-    env,
-    schema,
-)
-from beta9.abstractions import experimental
-from beta9.abstractions.base.container import Container
-from beta9.abstractions.endpoint import ASGI as asgi
-from beta9.abstractions.endpoint import Endpoint as endpoint
-from beta9.abstractions.endpoint import RealtimeASGI as realtime
-from beta9.abstractions.function import Function as function
-from beta9.abstractions.function import Schedule as schedule
-from beta9.abstractions.image import Image
-from beta9.abstractions.map import Map
-from beta9.abstractions.output import Output
-from beta9.abstractions.pod import Pod, PodInstance
-from beta9.abstractions.queue import SimpleQueue as Queue
-from beta9.abstractions.taskqueue import TaskQueue as task_queue
-from beta9.abstractions.volume import CloudBucket, CloudBucketConfig, Volume
-from beta9.client.deployment import Deployment
-from beta9.client.task import Task
-from beta9.type import GpuType, PythonVersion, QueueDepthAutoscaler
-
-from .client.client import Client
-
-
-def __getattr__(name):
-    if name == "VM" and hasattr(beta9, "VM"):
-        globals()[name] = beta9.VM
-        return beta9.VM
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 __all__ = [
@@ -114,5 +61,26 @@ __all__ = [
     "SandboxFileSearchRange",
 ]
 
-if hasattr(beta9, "VM"):
+# Inspect the export table without importing VM (and its SDK dependencies).
+if "VM" in vars(beta9) or (
+    "__getattr__" in vars(beta9) and "VM" in getattr(beta9, "__all__", ())
+):
     __all__.append("VM")
+
+
+def __getattr__(name):
+    if name not in __all__:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+    if name == "Client":
+        value = import_module(".client.client", __name__).Client
+    elif name == "PodInstance":
+        value = import_module("beta9.abstractions.pod").PodInstance
+    else:
+        value = getattr(beta9, name)
+    globals()[name] = value
+    return value
+
+
+def __dir__():
+    return sorted(set(globals()) | set(__all__))

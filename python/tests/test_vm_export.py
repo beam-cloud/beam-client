@@ -26,6 +26,10 @@ def test_vm_export_matches_installed_beta9(monkeypatch, available):
             if available:
                 patch.setattr(beta9, "VM", expected, raising=False)
             else:
+                # Older beta9 versions eagerly populated their public exports.
+                for name in beta9.__all__:
+                    if name != "VM":
+                        getattr(beta9, name)
                 patch.delattr(beta9, "VM", raising=False)
                 patch.delattr(beta9, "__getattr__", raising=False)
             importlib.reload(beam)

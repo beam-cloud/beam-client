@@ -7,7 +7,7 @@ import click
 from beta9.cli.main import load_cli
 from beta9.config import ConfigContext, SDKSettings
 
-from . import configure, example, quickstart, utils
+from . import configure, example, feedback, quickstart, utils
 
 
 def environment(domain: str) -> ConfigContext:
@@ -54,6 +54,8 @@ settings = SDKSettings(
         ),
     },
 )
+# Assigned rather than passed: beta9 releases before skill_sections refuse the keyword.
+settings.skill_sections = [feedback.SKILL_SECTION]
 
 
 # `login` comes from beta9 (OAuth device grant against each environment's
@@ -62,6 +64,7 @@ cli = load_cli(settings=settings, check_config=check_config)
 cli.register(configure)
 cli.register(quickstart)
 cli.register(example)
+cli.register(feedback)
 cli.load_version("beam-client")
 
 

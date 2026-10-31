@@ -54,6 +54,8 @@ settings = SDKSettings(
         ),
     },
 )
+# Assigned rather than passed: beta9 releases before skill_sections refuse the keyword.
+settings.skill_sections = [feedback.SKILL_SECTION]
 
 
 # `login` comes from beta9 (OAuth device grant against each environment's

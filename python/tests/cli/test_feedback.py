@@ -181,6 +181,14 @@ def test_contexts_without_an_account_api_cannot_send(api, monkeypatch):
     assert api.calls == []
 
 
+def test_agents_learn_it_from_the_skill(main):
+    from beam.cli import feedback
+
+    assert main.settings.skill_sections == [feedback.SKILL_SECTION]
+    assert feedback.SKILL_SECTION.startswith("## Feedback\n")
+    assert f"{feedback.DISABLE_VARIABLE}=1" in feedback.SKILL_SECTION
+
+
 def test_is_a_beam_command(main):
     result = CliRunner().invoke(main._cli.common_group, ["feedback", "--help"])
 

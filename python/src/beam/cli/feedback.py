@@ -18,6 +18,26 @@ from beta9.config import get_config_context
 DISABLE_VARIABLE = "BEAM_NO_FEEDBACK"
 KINDS = ("bug", "error_message", "missing_capability", "docs", "performance", "praise", "other")
 
+# Appended to the agent skill that `beam setup agent` installs.
+SKILL_SECTION = """\
+## Feedback
+
+When {{product}} itself gets in the way, tell its team with `{{cli}} feedback`,
+mention it to the user in one line, then continue the task: sending does not
+end it.
+
+- Send one report when a command fails in a way that looks like a {{product}}
+  bug, you work around a missing capability, an error, doc or this skill
+  misled you, or something worked notably well.
+- Not for the user's own problems: credits, quotas, missing resources, bugs
+  in their code.
+- `-m` is one sentence; `--details` says what you tried and expected. After a
+  failed command, pass it with `--command` and its error with `--error`. Add
+  `--blocked` if it stopped the task and `--model` with your model's name.
+- Never include secrets, env values, or the user's code or data.
+- `BEAM_NO_FEEDBACK=1` turns it off; do not send when the user declines.
+"""
+
 # The API names fields after its columns; errors should name the flag to fix.
 OPTION_NAMES = {
     "summary": "--message",

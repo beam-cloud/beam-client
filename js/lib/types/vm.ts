@@ -1,3 +1,4 @@
+import type { CpuTier } from "./pricing";
 import type { Image } from "../resources/abstraction/image";
 import type { Volume } from "../resources/volume";
 import type { ExecOptions } from "./pod";
@@ -27,6 +28,7 @@ export interface VMDisk {
 
 /** CPU-only persistent machine configuration. Omitted fields inherit a seed's configuration. */
 export interface VMConfig {
+  cpuTier?: CpuTier;
   name?: string;
   /** Fresh VMs default to digest-pinned Ubuntu 24.04. */
   image?: Image;
@@ -90,6 +92,8 @@ export interface VMListOptions {
   status?: VMStatus;
 }
 export interface VMUpdateOptions {
+  /** Change only while stopped. */
+  cpuTier?: CpuTier;
   idleTimeout?: number;
   ttl?: number;
   idleAction?: VMIdleAction;
@@ -110,6 +114,7 @@ export interface VMProcessWaitOptions {
 
 /** Resolved specification. CPU is exposed in cores; memory is in MiB. Env is redacted by the API. */
 export interface VMSpec {
+  cpuTier?: CpuTier;
   imageId: string;
   cpu: number;
   memory: number;
@@ -133,6 +138,15 @@ export interface VMSpec {
   sourceSnapshotId?: string;
 }
 export interface VMInfo {
+  cpuPricing?: {
+    tier: CpuTier;
+    version: string;
+    cpuCentsPerHour: string;
+    memoryCentsPerGibHour: string;
+    cpuPriceId: string;
+    memoryPriceId: string;
+  };
+  stopReason?: string;
   id: string;
   name: string;
   handle: string;

@@ -3,6 +3,7 @@ import { AutoscalerConfig } from "./autoscaler";
 import { TaskPolicyConfig } from "./task";
 import { PricingPolicyConfig } from "./pricing";
 import { Schema } from "./schema";
+import type { CpuTier } from "./pricing";
 import BaseData from "./base";
 
 export interface Stub extends BaseData {
@@ -44,6 +45,8 @@ export interface SecretVar {
 }
 
 export interface GetOrCreateStubRequest {
+  cpuTier?: CpuTier;
+  useVm?: boolean;
   objectId: string;
   imageId: string;
   stubType: string;
@@ -78,6 +81,7 @@ export interface GetOrCreateStubRequest {
 }
 
 export interface GetOrCreateStubResponse {
+  cpuPricing?: string;
   ok: boolean;
   stubId: string;
   errMsg?: string;

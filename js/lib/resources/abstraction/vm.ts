@@ -1,3 +1,4 @@
+import type { CpuTier } from "../../types/pricing";
 import { randomUUID } from "crypto";
 import { Image } from "./image";
 import {
@@ -88,6 +89,7 @@ export class VM extends VMAccess {
       "idleAction",
       "autoResume",
       "pool",
+      "cpuTier",
       "template",
       "snapshot",
       "metadata",
@@ -274,6 +276,7 @@ export class VM extends VMAccess {
       ["idleAction", "idle_action"],
       ["autoResume", "auto_resume"],
       ["pool", "pool"],
+      ["cpuTier", "cpu_tier"],
       ["blockNetwork", "block_network"],
       ["allowList", "allow_list"],
     ];
@@ -802,12 +805,13 @@ export class VM extends VMAccess {
   ): Promise<VMArtifact> {
     return this.templates.create({ name, description });
   }
-  async fork(name?: string, opts: VMCreateOptions = {}): Promise<VM> {
+  async fork(name?: string, opts: VMCreateOptions & { cpuTier?: CpuTier } = {}): Promise<VM> {
     const child = new VM({
       sshKeyPath: this.config.sshKeyPath,
       sshPublicKey: this.config.sshPublicKey,
     }).setInfo(
       await this.action("fork", {
+        cpu_tier: opts.cpuTier,
         name: name || "",
         ssh_public_key: this.config.sshPublicKey || (await this.publicKey()),
       }),

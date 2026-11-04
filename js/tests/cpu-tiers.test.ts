@@ -7,11 +7,11 @@ afterEach(() => jest.restoreAllMocks());
 
 async function prepare(
   config: ConstructorParameters<typeof Sandbox>[0],
-  accountTier = "shared"
+  accountTier = "performance"
 ) {
   const catalog = jest.spyOn(beamClient, "cpuTiers").mockResolvedValue({
     enabled: true,
-    default_cpu_tier: accountTier as "shared",
+    default_cpu_tier: accountTier as "performance",
   });
   const request = jest.spyOn(beamClient, "request").mockResolvedValue({
     data: { ok: true, stubId: "stub-tiered" },
@@ -43,11 +43,11 @@ test("sends the requested tier without looking up the account default", async ()
 });
 
 test.each([
-  [{ useVm: true }, "shared", 1024, 1],
+  [{ useVm: true }, "performance", 1024, 1],
   [{ useVm: true }, "", 128, 1],
-  [{ useVm: true, memory: 128, cpuTier: "shared" }, "shared", 128, 0],
-  [{ useVm: false }, "shared", 128, 0],
-  [{ useVm: true, gpu: "T4" }, "shared", 128, 0],
+  [{ useVm: true, memory: 128, cpuTier: "shared" }, "performance", 128, 0],
+  [{ useVm: false }, "performance", 128, 0],
+  [{ useVm: true, gpu: "T4" }, "performance", 128, 0],
 ] as const)(
   "native omitted defaults retain explicit, legacy and GPU resource requests: %p",
   async (config, tier, memory, lookups) => {

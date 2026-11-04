@@ -138,14 +138,6 @@ export interface VMSpec {
   sourceSnapshotId?: string;
 }
 export interface VMInfo {
-  cpuPricing?: {
-    tier: CpuTier;
-    version: string;
-    cpuCentsPerHour: string;
-    memoryCentsPerGibHour: string;
-    cpuPriceId: string;
-    memoryPriceId: string;
-  };
   stopReason?: string;
   id: string;
   name: string;

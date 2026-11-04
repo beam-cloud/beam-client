@@ -81,7 +81,6 @@ export interface GetOrCreateStubRequest {
 }
 
 export interface GetOrCreateStubResponse {
-  cpuPricing?: string;
   ok: boolean;
   stubId: string;
   errMsg?: string;

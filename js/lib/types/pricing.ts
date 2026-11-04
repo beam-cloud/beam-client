@@ -26,30 +26,8 @@ export class PricingPolicy {
 
 /** CPU capacity, selected per workload. Performance does not overbook vCPUs. */
 export type CpuTier = "spot" | "shared" | "performance";
-export interface CPUPriceBinding {
-  tier: CpuTier;
-  version: string;
-  cpu_price_id: string;
-  memory_price_id: string;
-  cpu_cents_per_hour: string;
-  memory_cents_per_gib_hour: string;
-}
+/** The workspace's CPU tier policy. */
 export interface CPUTierCatalog {
   enabled: boolean;
   default_cpu_tier: CpuTier | "";
-  cpu_tiers: Partial<
-    Record<
-      CpuTier,
-      {
-        available: boolean;
-        interruptible: boolean;
-        cpu_sharing: boolean | null;
-        pricing: CPUPriceBinding;
-        max_cpu?: number;
-        max_memory?: number;
-        native_vm_min_cpu: number;
-        native_vm_min_memory: number;
-      }
-    >
-  >;
 }

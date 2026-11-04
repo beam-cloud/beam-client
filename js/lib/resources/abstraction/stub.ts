@@ -7,7 +7,7 @@ import { Volume } from "../volume";
 import { FileSyncer } from "../../sync";
 import { Autoscaler, QueueDepthAutoscaler } from "../../types/autoscaler";
 import { TaskPolicy } from "../../types/task";
-import type { CpuTier, CPUPriceBinding } from "../../types/pricing";
+import type { CpuTier } from "../../types/pricing";
 import { PricingPolicy } from "../../types/pricing";
 import { Schema } from "../../types/schema";
 import {
@@ -92,7 +92,6 @@ export class StubBuilder {
   public imageId?: string = "";
   public objectId?: string = "";
   public lastError?: Error;
-  public resolvedPricing?: CPUPriceBinding;
   private defaultMemory: boolean;
 
   constructor({
@@ -441,8 +440,6 @@ export class StubBuilder {
         if (stubResponse.ok) {
           this.stubCreated = true;
           this.stubId = stubResponse.stubId;
-          if (stubResponse.cpuPricing)
-            this.resolvedPricing = JSON.parse(stubResponse.cpuPricing);
           if (stubResponse.warnMsg) {
             console.warn(stubResponse.warnMsg);
           }

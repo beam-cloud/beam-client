@@ -3,15 +3,6 @@ import { Sandbox } from "../lib/resources/abstraction/sandbox";
 import { VM } from "../lib/resources/abstraction/vm";
 import { EStubType } from "../lib/types/stub";
 
-const binding = {
-  tier: "performance",
-  version: "immutable-price-version",
-  cpu_price_id: "price_cpu",
-  memory_price_id: "price_memory",
-  cpu_cents_per_hour: "5",
-  memory_cents_per_gib_hour: "1",
-};
-
 afterEach(() => jest.restoreAllMocks());
 
 async function prepare(
@@ -21,14 +12,9 @@ async function prepare(
   const catalog = jest.spyOn(beamClient, "cpuTiers").mockResolvedValue({
     enabled: true,
     default_cpu_tier: accountTier as "shared",
-    cpu_tiers: {},
   });
   const request = jest.spyOn(beamClient, "request").mockResolvedValue({
-    data: {
-      ok: true,
-      stubId: "stub-tiered",
-      cpuPricing: JSON.stringify(binding),
-    },
+    data: { ok: true, stubId: "stub-tiered" },
   });
   const sandbox = new Sandbox({ name: "tier-contract", ...config });
   Object.assign(sandbox.stub, {
@@ -40,16 +26,11 @@ async function prepare(
   expect(
     await sandbox.stub.prepareRuntime(undefined, EStubType.Sandbox, true, ["*"])
   ).toBe(true);
-  return {
-    sandbox,
-    catalog,
-    request,
-    payload: request.mock.calls.at(-1)![0].data,
-  };
+  return { catalog, payload: request.mock.calls.at(-1)![0].data };
 }
 
-test("sends the Performance selector, keeps authority on the server, and records its resolved binding", async () => {
-  const { payload, sandbox, catalog } = await prepare({
+test("sends the requested tier without looking up the account default", async () => {
+  const { payload, catalog } = await prepare({
     cpuTier: "performance",
     useVm: true,
   });
@@ -58,8 +39,6 @@ test("sends the Performance selector, keeps authority on the server, and records
     use_vm: true,
     memory: 1024,
   });
-  expect(payload).not.toHaveProperty("cpu_pricing");
-  expect(sandbox.stub.resolvedPricing).toEqual(binding);
   expect(catalog).not.toHaveBeenCalled();
 });
 
@@ -84,7 +63,6 @@ test("VM stopped updates and forks transmit only the requested tier", async () =
       id: "vm",
       status: "stopped",
       spec: { cpu: 1000, memory: 1024, cpu_tier: "shared" },
-      cpu_pricing: binding,
       stop_reason: "preempted",
     },
   });

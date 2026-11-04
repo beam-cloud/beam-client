@@ -7,6 +7,7 @@ import { Volume } from "../volume";
 import { FileSyncer } from "../../sync";
 import { Autoscaler, QueueDepthAutoscaler } from "../../types/autoscaler";
 import { TaskPolicy } from "../../types/task";
+import type { CpuTier } from "../../types/pricing";
 import { PricingPolicy } from "../../types/pricing";
 import { Schema } from "../../types/schema";
 import {
@@ -27,6 +28,8 @@ import {
 } from "../../util";
 
 export interface StubConfig {
+  cpuTier?: CpuTier;
+  useVm?: boolean;
   name: string;
   app: string;
   cpu: number | string;
@@ -89,6 +92,7 @@ export class StubBuilder {
   public imageId?: string = "";
   public objectId?: string = "";
   public lastError?: Error;
+  private defaultMemory: boolean;
 
   constructor({
     name,
@@ -98,7 +102,9 @@ export class StubBuilder {
     callbackUrl = "",
     cpu = 1,
     ports = [],
-    memory = 128,
+    memory,
+    cpuTier,
+    useVm = false,
     gpuCount = 0,
     volumes = [],
     gpu = GpuType.NoGPU,
@@ -127,7 +133,10 @@ export class StubBuilder {
     this.config.image = image || new Image({});
     this.config.callbackUrl = callbackUrl;
     this.config.cpu = cpu;
-    this.config.memory = memory;
+    this.defaultMemory = memory === undefined;
+    this.config.memory = memory ?? 128;
+    this.config.cpuTier = cpuTier;
+    this.config.useVm = useVm || undefined;
     this.config.gpu = gpu;
     this.config.gpuCount = gpuCount;
     this.config.volumes = volumes;
@@ -329,6 +338,15 @@ export class StubBuilder {
 
     // Create stub if not already created
     if (!this.stubCreated) {
+      if (
+        this.config.useVm &&
+        this.defaultMemory &&
+        parseGpu(this.config.gpu).length === 0
+      ) {
+        const tier =
+          this.config.cpuTier || (await beamClient.cpuTiers()).default_cpu_tier;
+        if (tier) this.config.memory = 1024;
+      }
       const stubRequest: GetOrCreateStubRequest = {
         objectId: this.objectId!,
         imageId: this.config.image.id,
@@ -337,6 +355,8 @@ export class StubBuilder {
         appName: this.config.app,
         pythonVersion: this.config.image?.config.pythonVersion || "python3.10",
         cpu: parseCpu(this.config.cpu),
+        cpuTier: this.config.cpuTier,
+        useVm: this.config.useVm,
         memory: parseMemory(this.config.memory),
         gpu: parseGpu(this.config.gpu),
         gpuCount: this.config.gpuCount,

@@ -1,4 +1,5 @@
 import axios, { Axios, AxiosRequestConfig } from "axios";
+import type { CPUTierCatalog } from "./types/pricing";
 import { camelCaseToSnakeCaseKeys } from "./util";
 
 export interface BeamClientOpts {
@@ -41,6 +42,14 @@ class BeamClient {
     }
 
     return await this._client.request(config);
+  }
+
+  public async cpuTiers(): Promise<CPUTierCatalog> {
+    const response = await this.request({
+      method: "GET",
+      url: "/api/v1/gateway/cpu-tiers",
+    });
+    return JSON.parse(response.data.catalog);
   }
 
   public async _getWorkspace(): Promise<any> {

@@ -41,7 +41,7 @@ from beta9.abstractions.taskqueue import TaskQueue as task_queue
 from beta9.abstractions.volume import CloudBucket, CloudBucketConfig, Volume
 from beta9.client.deployment import Deployment
 from beta9.client.task import Task
-from beta9.type import GpuType, PythonVersion, QueueDepthAutoscaler
+from beta9.type import CpuTier, GpuType, PythonVersion, QueueDepthAutoscaler
 
 from .client.client import Client
 
@@ -54,6 +54,7 @@ def __getattr__(name):
 
 
 __all__ = [
+    "CpuTier",
     "Map",
     "Image",
     "Queue",

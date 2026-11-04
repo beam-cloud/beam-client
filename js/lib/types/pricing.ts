@@ -23,3 +23,11 @@ export class PricingPolicy {
     this.costPerTaskDurationMs = config.costPerTaskDurationMs ?? 0.0;
   }
 }
+
+/** CPU capacity, selected per workload. Performance does not overbook vCPUs. */
+export type CpuTier = "spot" | "shared" | "performance";
+/** The workspace's CPU tier policy. */
+export interface CPUTierCatalog {
+  enabled: boolean;
+  default_cpu_tier: CpuTier | "";
+}

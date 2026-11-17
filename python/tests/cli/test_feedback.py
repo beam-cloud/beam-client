@@ -5,6 +5,7 @@ import sys
 
 import pytest
 import requests
+from beta9 import terminal
 from beta9.config import ConfigContext
 from click.testing import CliRunner
 
@@ -124,6 +125,19 @@ def test_needs_a_summary_without_a_terminal(api, monkeypatch):
     assert api.calls == []
 
 
+def test_asks_for_the_summary_in_a_terminal(api, monkeypatch):
+    answers = iter(["deploy ignored --port", None])
+    monkeypatch.setattr(terminal, "is_interactive", lambda: True)
+    monkeypatch.setattr(terminal, "prompt", lambda text: next(answers))
+
+    assert feedback("--kind", "bug").exit_code == 0
+    unanswered = feedback("--kind", "bug")
+
+    assert unanswered.exit_code == 1
+    assert "Say what happened in one sentence" in unanswered.output
+    assert [request["json"]["summary"] for _, request in api.calls] == ["deploy ignored --port"]
+
+
 def test_names_the_flag_to_fix(api):
     api.response = FakeResponse(
         400,
@@ -179,6 +193,20 @@ def test_contexts_without_an_account_api_cannot_send(api, monkeypatch):
     assert result.exit_code == 1
     assert "no Beam account" in result.output
     assert api.calls == []
+
+
+def test_contexts_saved_without_an_auth_url_use_their_gateways(api, tmp_path):
+    saved = "s" * 64
+    (tmp_path / "config.ini").write_text(
+        f"[default]\ntoken = {saved}\ngateway_host = gateway.beam.cloud\ngateway_port = 443\n"
+    )
+
+    result = feedback("-m", "deploy ignored --port")
+
+    assert result.exit_code == 0, result.output
+    [(url, request)] = api.calls
+    assert url == "https://api.beam.cloud/v2/oauth/cli/feedback"
+    assert request["headers"]["Authorization"] == f"Bearer {saved}"
 
 
 def test_agents_learn_it_from_the_skill(main):

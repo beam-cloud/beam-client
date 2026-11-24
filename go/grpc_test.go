@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/beam-cloud/beta9/proto"
+	pb "github.com/beam-cloud/beam-client/go/internal/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"

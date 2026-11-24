@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	pb "github.com/beam-cloud/beta9/proto"
+	pb "github.com/beam-cloud/beam-client/go/internal/proto"
 )
 
 // SandboxConfig configures a new sandbox.

@@ -3,7 +3,7 @@ package beam
 import (
 	"context"
 
-	pb "github.com/beam-cloud/beta9/proto"
+	pb "github.com/beam-cloud/beam-client/go/internal/proto"
 )
 
 // VolumeMount is implemented by Beam volume and cloud bucket mounts.

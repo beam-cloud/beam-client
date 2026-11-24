@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	pb "github.com/beam-cloud/beta9/proto"
+	pb "github.com/beam-cloud/beam-client/go/internal/proto"
 )
 
 // Image describes the image used to run a sandbox.

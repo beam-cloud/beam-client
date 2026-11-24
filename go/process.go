@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	pb "github.com/beam-cloud/beta9/proto"
+	pb "github.com/beam-cloud/beam-client/go/internal/proto"
 )
 
 var sandboxExecReadyRetryDelay = 500 * time.Millisecond

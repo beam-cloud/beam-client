@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	pb "github.com/beam-cloud/beta9/proto"
+	pb "github.com/beam-cloud/beam-client/go/internal/proto"
 )
 
 var deterministicZipTime = time.Date(1980, 1, 1, 0, 0, 0, 0, time.UTC)

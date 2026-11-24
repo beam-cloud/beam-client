@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
-	pb "github.com/beam-cloud/beta9/proto"
+	pb "github.com/beam-cloud/beam-client/go/internal/proto"
 )
 
 // FileSystem exposes file operations inside a sandbox.

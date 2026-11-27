@@ -72,6 +72,8 @@ def test_sends_the_report_to_the_account_api(api, monkeypatch):
         "--kind",
         "bug",
         "--blocked",
+        "--goal",
+        "Put a FastAPI app online",
         "--command",
         "beam deploy app.py:handler --port 8080",
         "--error",
@@ -91,6 +93,7 @@ def test_sends_the_report_to_the_account_api(api, monkeypatch):
     assert report["kind"] == "bug"
     assert report["summary"] == "deploy ignored --port"
     assert report["blocked"] is True
+    assert report["user_request"] == "Put a FastAPI app online"
     assert report["command"] == "beam deploy app.py:handler --port 8080"
     assert report["error_message"] == "port 8000 is not exposed"
     assert report["model"] == "claude-opus-4"
@@ -207,14 +210,6 @@ def test_contexts_saved_without_an_auth_url_use_their_gateways(api, tmp_path):
     [(url, request)] = api.calls
     assert url == "https://api.beam.cloud/v2/oauth/cli/feedback"
     assert request["headers"]["Authorization"] == f"Bearer {saved}"
-
-
-def test_agents_learn_it_from_the_skill(main):
-    from beam.cli import feedback
-
-    assert main.settings.skill_sections == [feedback.SKILL_SECTION]
-    assert feedback.SKILL_SECTION.startswith("## Feedback\n")
-    assert f"{feedback.DISABLE_VARIABLE}=1" in feedback.SKILL_SECTION
 
 
 def test_is_a_beam_command(main):

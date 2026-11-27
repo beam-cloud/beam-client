@@ -36,7 +36,7 @@ def common(**_):
         \b
       Coding agents: when {{cli_name}} blocks or misleads you, send one report, then carry on.
       Leave out secrets and the user's code or data.
-      Set {DISABLE_VARIABLE}=1 to turn this command off.
+      Set {DISABLE_VARIABLE}=1 to turn this command off; errors then stop suggesting it.
     """,
 )
 @click.option(
@@ -135,6 +135,34 @@ def feedback(
 
 def feedback_disabled() -> bool:
     return os.getenv(DISABLE_VARIABLE, "").strip().lower() in ("1", "true", "yes")
+
+
+_suggested = False
+
+
+def report_command(failed: str) -> Optional[str]:
+    """
+    The command line that reports a failure, ready to fill in. An error ends
+    with it, so an agent learns about `beam feedback` when something breaks.
+    `failed` is the command that failed, by name only ("beam secret create").
+
+    None when feedback is turned off, when it was `beam feedback` that failed,
+    and for every error of a run after the first.
+    """
+    global _suggested
+
+    words = failed.split()
+    if _suggested or feedback_disabled() or words[1:2] == ["feedback"]:
+        return None
+    _suggested = True
+    about = f' --command "{failed}"' if len(words) > 1 else ""  # "beam" alone names none
+    return f'beam feedback{about} -m "<what happened>"'
+
+
+def suggest(failed: str) -> None:
+    """Ends an error that this package printed itself the way beta9 ends its own."""
+    if command := report_command(failed):
+        click.secho(f"Send feedback about this to the Beam team: {command}", err=True, dim=True)
 
 
 def environment() -> str:

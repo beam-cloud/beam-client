@@ -2,11 +2,14 @@
 
 import json
 import sys
+from types import SimpleNamespace
 
+import click
 import pytest
 import requests
 from beta9 import terminal
-from beta9.config import ConfigContext
+from beta9.cli.extraclick import ClickCommonGroup
+from beta9.config import ConfigContext, get_settings
 from click.testing import CliRunner
 
 TOKEN = "t" * 64
@@ -46,7 +49,9 @@ def main(monkeypatch, tmp_path):
         monkeypatch.delenv(name, raising=False)
     sys.modules.pop("beam.cli.main", None)
     import beam.cli.main as module
+    from beam.cli import feedback
 
+    monkeypatch.setattr(feedback, "_suggested", False)  # every test is a run of its own
     return module
 
 
@@ -218,3 +223,83 @@ def test_is_a_beam_command(main):
     assert result.exit_code == 0, result.output
     assert "beam feedback -m" in result.output
     assert "BEAM_NO_FEEDBACK=1" in result.output
+
+
+SUGGESTION = "Send feedback about this to the Beam team: "
+
+
+@pytest.fixture
+def beam(main, monkeypatch, capsys):
+    """Runs `beam <words>` as the installed command does: its exit code and what it printed."""
+    from beam.cli import utils
+
+    monkeypatch.setattr(utils, "check_version", lambda: None)
+
+    def run(*words):
+        monkeypatch.setattr(sys, "argv", ["beam", *words])
+        with pytest.raises(SystemExit) as exited:
+            main.cli()
+        return exited.value.code, capsys.readouterr().err
+
+    return run
+
+
+def test_a_usage_error_ends_with_the_command_that_reports_it(beam):
+    code, printed = beam("secret", "create", "API_KEY", "hunter2", "--no-such-option")
+
+    assert code == 2
+    assert printed.splitlines()[-1] == (
+        SUGGESTION + 'beam feedback --command "beam secret create" -m "<what happened>"'
+    )
+
+
+def test_a_mistyped_command_is_not_named(beam):
+    code, printed = beam("deplyo", "app.py:handler")
+
+    assert code == 2
+    assert printed.splitlines()[-1] == SUGGESTION + 'beam feedback -m "<what happened>"'
+
+
+def test_a_crash_ends_with_its_traceback_and_the_command_that_reports_it(main, beam):
+    @click.group(cls=ClickCommonGroup)
+    def common(**_):
+        pass
+
+    @common.command()
+    def crash():
+        raise RuntimeError("boom")
+
+    main._cli.register(SimpleNamespace(common=common))
+
+    code, printed = beam("crash")
+
+    assert code == 1
+    assert printed.splitlines()[-2:] == [
+        "RuntimeError: boom",
+        SUGGESTION + 'beam feedback --command "beam crash" -m "<what happened>"',
+    ]
+
+
+def test_errors_that_beta9_prints_end_with_the_same_command(main, monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["beam", "deploy", "app.py:handler"])
+
+    command = get_settings().feedback_command
+
+    assert command() == 'beam feedback --command "beam deploy" -m "<what happened>"'
+    assert command() is None  # once a run
+
+
+def test_its_own_failures_do_not_suggest_it(beam):
+    code, printed = beam("feedback", "--no-such-option")
+
+    assert code == 2
+    assert SUGGESTION not in printed
+
+
+def test_nothing_is_suggested_when_turned_off(beam, monkeypatch):
+    monkeypatch.setenv("BEAM_NO_FEEDBACK", "1")
+
+    code, printed = beam("deploy", "--no-such-option")
+
+    assert code == 2
+    assert SUGGESTION not in printed

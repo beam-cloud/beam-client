@@ -69,6 +69,24 @@ cli.load_version("beam-client")
 _cli = cli
 
 
+def running_command() -> str:
+    """The command being run, by name only: `beam secret create`, whatever its arguments."""
+    names, command = ["beam"], _cli.common_group
+    for word in sys.argv[1:]:
+        subcommand = getattr(command, "get_command", None)  # groups have subcommands
+        command = subcommand(None, word) if subcommand else None
+        if command is None:
+            break
+        names.append(word)
+    return " ".join(names)
+
+
+# Errors that beta9 prints end with the `beam feedback` command that reports
+# them; `cli` below does the same for the rest. Assigned rather than passed to
+# SDKSettings: a beta9 release without this setting ignores it.
+settings.feedback_command = lambda: feedback.report_command(running_command())
+
+
 def cli():
     if not any(arg in ("--help", "-h", "--help-all", "--version") for arg in sys.argv[1:]):
         utils.check_version()
@@ -81,9 +99,15 @@ def cli():
         raise click.Abort() from e
     except click.exceptions.ClickException as e:
         e.show()
+        feedback.suggest(running_command())
         sys.exit(e.exit_code)
     except click.exceptions.Exit as e:
         sys.exit(e.exit_code)
     except click.exceptions.Abort:
         click.echo(_("Aborted!"), file=sys.stderr)
+        sys.exit(1)
+    except Exception:
+        # A bug in the CLI: the traceback as Python would print it, then how to report it.
+        sys.excepthook(*sys.exc_info())
+        feedback.suggest(running_command())
         sys.exit(1)
